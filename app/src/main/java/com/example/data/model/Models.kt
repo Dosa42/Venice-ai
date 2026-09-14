@@ -102,7 +102,8 @@ data class ChatMessage(
     val thoughtProcess: String? = null,
     val modelUsed: String? = null,
     val thinkingEnabled: Boolean = false,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val localContext: LocalContextAttachment? = null
 )
 
 data class ChatSession(

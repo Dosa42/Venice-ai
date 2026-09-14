@@ -123,6 +123,13 @@ fun MessageBubble(
             )
         }
 
+        message.localContext?.let { attachment ->
+            LocalContextCard(
+                attachment = attachment,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+
         // Attached image (Multimodal Vision / Studio generation)
         if (message.imageBase64 != null) {
             val bitmap = GeminiApi.base64ToBitmap(message.imageBase64)
