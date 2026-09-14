@@ -60,6 +60,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ChatMessage
+import com.example.ui.components.LocalContextCard
 import com.example.ui.components.MessageBubble
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBackground
@@ -232,6 +233,14 @@ fun ChatScreen(
             }
         )
 
+        uiState.attachedLocalContext?.let { attachment ->
+            LocalContextCard(
+                attachment = attachment,
+                onRemove = { viewModel.removeLocalContext() },
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+
         // Attached image preview before sending
         if (uiState.attachedImageBitmap != null) {
             Row(
@@ -358,12 +367,12 @@ fun ChatScreen(
                         viewModel.sendChatMessage()
                     }
                 },
-                enabled = (uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat,
+                enabled = (uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null || uiState.attachedLocalContext != null) && !uiState.isGeneratingChat,
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
                     .background(
-                        if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat)
+                        if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null || uiState.attachedLocalContext != null) && !uiState.isGeneratingChat)
                             (if (uiState.isHighThinkingEnabled) VeniceThinkingPurple else VeniceAmber)
                         else VeniceSurfaceElevated
                     )
@@ -372,7 +381,7 @@ fun ChatScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send Message",
-                    tint = if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat)
+                    tint = if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null || uiState.attachedLocalContext != null) && !uiState.isGeneratingChat)
                         Color.Black else VeniceTextMuted,
                     modifier = Modifier.size(18.dp)
                 )

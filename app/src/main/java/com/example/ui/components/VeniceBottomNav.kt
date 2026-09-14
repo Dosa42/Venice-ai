@@ -16,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -80,7 +82,7 @@ fun VeniceBottomNav(
             )
 
             VeniceNavItem(
-                title = "Intelligence",
+                title = "Tools",
                 selected = activeTab == VeniceNavTab.INTELLIGENCE,
                 selectedIcon = Icons.Default.AutoAwesome,
                 unselectedIcon = Icons.Outlined.AutoAwesome,
@@ -89,7 +91,16 @@ fun VeniceBottomNav(
             )
 
             VeniceNavItem(
-                title = "Privacy Vault",
+                title = "Files",
+                selected = activeTab == VeniceNavTab.LOCAL_FILES,
+                selectedIcon = Icons.Default.Folder,
+                unselectedIcon = Icons.Outlined.Folder,
+                testTag = "nav_files",
+                onClick = { onTabSelected(VeniceNavTab.LOCAL_FILES) }
+            )
+
+            VeniceNavItem(
+                title = "Privacy",
                 selected = activeTab == VeniceNavTab.PRIVACY_VAULT,
                 selectedIcon = Icons.Default.Shield,
                 unselectedIcon = Icons.Outlined.Shield,
@@ -113,7 +124,7 @@ private fun VeniceNavItem(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable { onClick() }
-            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
             .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

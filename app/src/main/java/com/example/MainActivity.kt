@@ -23,6 +23,7 @@ import com.example.ui.components.ModelSelectorDialog
 import com.example.ui.components.PersonaSelectorSheet
 import com.example.ui.components.VeniceBottomNav
 import com.example.ui.components.VeniceTopBar
+import com.example.ui.screens.LocalFilesScreen
 import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.ImageStudioScreen
 import com.example.ui.screens.IntelligenceScreen
@@ -84,6 +85,7 @@ fun VeniceApp(
         ) {
             Crossfade(targetState = uiState.currentTab, label = "tab_crossfade") { tab ->
                 when (tab) {
+                    VeniceNavTab.LOCAL_FILES -> LocalFilesScreen(viewModel = viewModel, uiState = uiState)
                     VeniceNavTab.CHAT -> ChatScreen(
                         viewModel = viewModel,
                         uiState = uiState
