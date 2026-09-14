@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -121,6 +122,34 @@ fun MessageBubble(
                 color = VeniceTextMuted,
                 fontSize = 10.sp
             )
+        }
+
+        // Attached document chip (SAF document / log / script)
+        if (!message.attachedFileName.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .padding(bottom = 6.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, VeniceCyan.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                    .background(VeniceSurfaceElevated)
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = "Attached Document",
+                        tint = VeniceCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = message.attachedFileName,
+                        color = VeniceCyan,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
         }
 
         // Attached image (Multimodal Vision / Studio generation)

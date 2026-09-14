@@ -83,6 +83,14 @@ data class Persona(
                 tag = "Privacy"
             ),
             Persona(
+                id = "nethunter_copilot",
+                name = "NetHunter & SysAdmin",
+                title = "Kernel, NetHunter & Scripts",
+                description = "Linux sysadmin, bash scripting, network troubleshooting, package auditing, and diagnostic logs analysis.",
+                systemPrompt = "You are Venice NetHunter & Systems Copilot, an expert in Linux administration, Kali NetHunter environments, shell scripting (bash/zsh), network diagnostics, package compilation, kernel error logs, and system hardening. Provide direct, highly technical, clean commands, script fixes, and log diagnoses without preachy disclaimers.",
+                tag = "SysAdmin"
+            ),
+            Persona(
                 id = "creative_muse",
                 name = "Creative Muse",
                 title = "Cinematic & Narrative",
@@ -99,6 +107,7 @@ data class ChatMessage(
     val role: String, // "user" or "model"
     val text: String,
     val imageBase64: String? = null,
+    val attachedFileName: String? = null,
     val thoughtProcess: String? = null,
     val modelUsed: String? = null,
     val thinkingEnabled: Boolean = false,
@@ -134,3 +143,39 @@ data class PrivacyTelemetry(
     val anonymousIpMasking: Boolean = true,
     val cloudSyncActive: Boolean = false
 )
+
+data class NetHunterHardwareProfile(
+    val isEnabled: Boolean = true,
+    val deviceModel: String = "samsung SM-A326B (Galaxy A32 5G)",
+    val androidVersion: String = "13 (API 33)",
+    val cpuArch: String = "aarch64 / arm64-v8a",
+    val kernelVersion: String = "Linux kali 4.14.186-27095505 (SMP PREEMPT)",
+    val rootStatus: String = "30.7:MAGISKSU",
+    val chrootPath: String = "/data/local/nhsystem/kali-arm64",
+    val chrootStatus: String = "Running (proc, sys, dev, dev/pts, system, sdcard mounted)",
+    val activeServices: String = "Apache2, DBus (RunOnChrootStart: ON)",
+    val networkInterfaces: String = "wlan0 (192.168.1.20/24), dummy0",
+    val ramSummary: String = "~1226 MB available / 3528 MB total (OOM Guard Active)",
+    val customNotes: String = "MediaTek MT6853. External WiFi / Packet injection requires compatible USB-OTG adapter or patched driver. Keep compilation flags low (-j2) to avoid OOM."
+) {
+    fun toSystemPromptContext(): String {
+        return """
+[HOST HARDWARE & NETHUNTER ENVIRONMENT BLUEPRINT]:
+- Target Device: $deviceModel
+- CPU Architecture: $cpuArch
+- Android OS: Android $androidVersion
+- Kernel Version: $kernelVersion
+- Root Privileges: $rootStatus
+- Kali Chroot Path: $chrootPath (Status: $chrootStatus)
+- Active Services: $activeServices
+- Local Interfaces: $networkInterfaces
+- Memory Limits: $ramSummary
+- Operational Constraints: $customNotes
+- Execution Environment: Kali NetHunter Terminal (chroot at $chrootPath) is the EXCLUSIVE environment. Never mention, assume, or reference Termux, PRoot, or standard Android userspace. All commands must be natively executable inside Kali NetHunter chroot (`/data/local/nhsystem/kali-arm64`) or via NetHunter Terminal (`nh` / `nh -r`). Ensure arm64 / aarch64 binary compatibility. Direct, concise, zero fluff.
+""".trimIndent()
+    }
+
+    companion object {
+        val DEFAULT = NetHunterHardwareProfile()
+    }
+}

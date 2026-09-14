@@ -146,6 +146,7 @@ object FirebaseManager {
                 "modelUsed" to (message.modelUsed ?: ""),
                 "thinkingEnabled" to message.thinkingEnabled,
                 "timestamp" to message.timestamp,
+                "attachedFileName" to (message.attachedFileName ?: ""),
                 "hasImage" to (message.imageBase64 != null)
             )
             firestore.collection("users")

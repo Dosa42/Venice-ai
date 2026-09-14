@@ -5,11 +5,17 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.adaptive.AdaptiveCategory
+import com.example.data.adaptive.AdaptiveFact
+import com.example.data.adaptive.DynamicAdaptiveEngine
 import com.example.data.api.GeminiApi
+import com.example.data.auth.OpenAIOAuthManager
+import com.example.data.auth.OpenAIOAuthSession
 import com.example.data.firebase.FirebaseManager
 import com.example.data.model.ChatMessage
 import com.example.data.model.ChatSession
 import com.example.data.model.GeneratedArt
+import com.example.data.model.NetHunterHardwareProfile
 import com.example.data.model.Persona
 import com.example.data.model.PrivacyTelemetry
 import com.example.data.model.VeniceModel
@@ -40,6 +46,9 @@ data class VeniceUiState(
     val chatInputText: String = "",
     val attachedImageBase64: String? = null,
     val attachedImageBitmap: Bitmap? = null,
+    val attachedFileName: String? = null,
+    val attachedFileContent: String? = null,
+    val attachedFileSize: Long = 0L,
     val chatErrorMessage: String? = null,
 
     // Image Studio state
@@ -63,7 +72,26 @@ data class VeniceUiState(
     val isZeroRetentionMode: Boolean = false,
     val isCloudSyncEnabled: Boolean = true,
     val privacyTelemetry: PrivacyTelemetry = PrivacyTelemetry(),
-    val statusNotice: String? = null
+    val statusNotice: String? = null,
+
+    // Host & NetHunter Hardware Profile
+    val hardwareProfile: NetHunterHardwareProfile = NetHunterHardwareProfile.DEFAULT,
+    val injectHardwareProfile: Boolean = true,
+
+    // Incoming Share Payload from NetHunter Terminal / External Apps
+    val sharedTerminalPayload: String? = null,
+
+    // OpenAI / ChatGPT OAuth PKCE
+    val openAiSession: OpenAIOAuthSession? = null,
+    val isOpenAiAuthenticating: Boolean = false,
+    val openAiAuthStatus: String? = null,
+    val openAiCustomClientId: String = OpenAIOAuthManager.DEFAULT_CLIENT_ID,
+
+    // Dynamic Adaptive Framework (DAF)
+    val adaptiveFacts: List<AdaptiveFact> = emptyList(),
+    val isAutoLearningEnabled: Boolean = true,
+    val lastLearnedNotice: String? = null,
+    val dynamicAdaptivePromptContext: String = ""
 )
 
 class VeniceViewModel : ViewModel() {
@@ -197,8 +225,27 @@ class VeniceViewModel : ViewModel() {
             chatInputText = "",
             attachedImageBase64 = null,
             attachedImageBitmap = null,
+            attachedFileName = null,
+            attachedFileContent = null,
+            attachedFileSize = 0L,
             chatErrorMessage = null,
             savedSessions = listOf(newSession) + _uiState.value.savedSessions.filter { it.id != newSession.id }
+        )
+    }
+
+    fun attachDocument(name: String, content: String, size: Long) {
+        _uiState.value = _uiState.value.copy(
+            attachedFileName = name,
+            attachedFileContent = content,
+            attachedFileSize = size
+        )
+    }
+
+    fun removeAttachedDocument() {
+        _uiState.value = _uiState.value.copy(
+            attachedFileName = null,
+            attachedFileContent = null,
+            attachedFileSize = 0L
         )
     }
 
@@ -218,18 +265,34 @@ class VeniceViewModel : ViewModel() {
     fun sendChatMessage() {
         val prompt = _uiState.value.chatInputText.trim()
         val attachedImage = _uiState.value.attachedImageBase64
-        if (prompt.isBlank() && attachedImage == null) return
+        val attachedFileContent = _uiState.value.attachedFileContent
+        val attachedFileName = _uiState.value.attachedFileName
+
+        if (prompt.isBlank() && attachedImage == null && attachedFileContent == null) return
+
+        val fullText = if (attachedFileContent != null) {
+            if (prompt.isNotBlank()) {
+                "Attached Document ($attachedFileName):\n```\n$attachedFileContent\n```\n\n$prompt"
+            } else {
+                "Please analyze this attached document ($attachedFileName):\n```\n$attachedFileContent\n```"
+            }
+        } else {
+            prompt
+        }
 
         val userMessage = ChatMessage(
             role = "user",
-            text = prompt,
+            text = fullText,
             imageBase64 = attachedImage,
+            attachedFileName = attachedFileName,
             timestamp = System.currentTimeMillis()
         )
 
         val updatedMessages = _uiState.value.currentSession.messages + userMessage
         val updatedTitle = if (_uiState.value.currentSession.messages.size <= 1 && prompt.isNotBlank()) {
             prompt.take(30) + if (prompt.length > 30) "..." else ""
+        } else if (_uiState.value.currentSession.messages.size <= 1 && attachedFileName != null) {
+            "Analysis: $attachedFileName"
         } else {
             _uiState.value.currentSession.title
         }
@@ -245,6 +308,9 @@ class VeniceViewModel : ViewModel() {
             chatInputText = "",
             attachedImageBase64 = null,
             attachedImageBitmap = null,
+            attachedFileName = null,
+            attachedFileContent = null,
+            attachedFileSize = 0L,
             isGeneratingChat = true,
             chatErrorMessage = null
         )
@@ -256,10 +322,19 @@ class VeniceViewModel : ViewModel() {
                 _uiState.value.selectedModel.id
             }
 
+            val basePrompt = _uiState.value.selectedPersona.systemPrompt
+            val hardwarePart = if (_uiState.value.injectHardwareProfile && _uiState.value.hardwareProfile.isEnabled) {
+                "\n\n${_uiState.value.hardwareProfile.toSystemPromptContext()}"
+            } else ""
+            val adaptivePart = if (_uiState.value.dynamicAdaptivePromptContext.isNotBlank()) {
+                "\n\n${_uiState.value.dynamicAdaptivePromptContext}"
+            } else ""
+            val effectiveSystemPrompt = "$basePrompt$hardwarePart$adaptivePart"
+
             val result = GeminiApi.generateChatResponse(
                 modelName = modelName,
                 history = updatedMessages,
-                systemInstruction = _uiState.value.selectedPersona.systemPrompt,
+                systemInstruction = effectiveSystemPrompt,
                 enableHighThinking = _uiState.value.isHighThinkingEnabled
             )
 
@@ -393,9 +468,23 @@ class VeniceViewModel : ViewModel() {
         val input = _uiState.value.intelligenceInput.trim()
         if (input.isBlank()) return
 
+        val hardwareContext = buildString {
+            if (_uiState.value.injectHardwareProfile && _uiState.value.hardwareProfile.isEnabled) {
+                append(_uiState.value.hardwareProfile.toSystemPromptContext())
+            }
+            if (_uiState.value.dynamicAdaptivePromptContext.isNotBlank()) {
+                if (isNotEmpty()) append("\n\n")
+                append(_uiState.value.dynamicAdaptivePromptContext)
+            }
+        }.takeIf { it.isNotBlank() }
+
         _uiState.value = _uiState.value.copy(isRunningIntelligence = true)
         viewModelScope.launch {
-            val output = GeminiApi.runIntelligenceTask(_uiState.value.intelligenceTool, input)
+            val output = GeminiApi.runIntelligenceTask(
+                taskType = _uiState.value.intelligenceTool,
+                input = input,
+                hardwareContext = hardwareContext
+            )
             _uiState.value = _uiState.value.copy(
                 intelligenceOutput = output,
                 isRunningIntelligence = false
@@ -411,6 +500,15 @@ class VeniceViewModel : ViewModel() {
                 currentTab = VeniceNavTab.CHAT
             )
         }
+    }
+
+    fun sendAnalysisToChat(taskTitle: String, content: String) {
+        if (content.isBlank()) return
+        val formatted = "Terminal / Diagnostic Analysis for [$taskTitle]:\n\n$content\n\nHow do I test or apply this in my NetHunter terminal?"
+        _uiState.value = _uiState.value.copy(
+            chatInputText = formatted,
+            currentTab = VeniceNavTab.CHAT
+        )
     }
 
     fun applyEnhancedPromptToStudio() {
@@ -531,5 +629,246 @@ class VeniceViewModel : ViewModel() {
                 galleryArt = if (gallery.isNotEmpty()) gallery else _uiState.value.galleryArt
             )
         }
+    }
+
+    // --- Host & NetHunter Hardware Profile Controls ---
+
+    fun toggleHardwareProfileInjection(enabled: Boolean) {
+        val updatedProfile = _uiState.value.hardwareProfile.copy(isEnabled = enabled)
+        _uiState.value = _uiState.value.copy(
+            hardwareProfile = updatedProfile,
+            injectHardwareProfile = enabled,
+            statusNotice = if (enabled) "NetHunter SM-A326B Hardware Blueprint Active" else "Hardware Blueprint Inactive"
+        )
+    }
+
+    fun updateHardwareProfile(profile: NetHunterHardwareProfile) {
+        _uiState.value = _uiState.value.copy(
+            hardwareProfile = profile,
+            statusNotice = "Hardware Blueprint Updated"
+        )
+    }
+
+    fun resetHardwareProfileToDefaults() {
+        _uiState.value = _uiState.value.copy(
+            hardwareProfile = NetHunterHardwareProfile.DEFAULT,
+            injectHardwareProfile = true,
+            statusNotice = "Restored Samsung SM-A326B NetHunter Blueprint"
+        )
+    }
+
+    // --- External NetHunter Terminal Share Intent Receiver ---
+
+    fun handleIncomingSharedContent(text: String) {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            currentTab = VeniceNavTab.CHAT,
+            sharedTerminalPayload = trimmed,
+            chatInputText = if (_uiState.value.chatInputText.isBlank()) {
+                trimmed
+            } else {
+                "${_uiState.value.chatInputText}\n\n$trimmed"
+            },
+            statusNotice = "📥 Received payload from NetHunter Terminal"
+        )
+    }
+
+    fun dismissSharedPayload() {
+        _uiState.value = _uiState.value.copy(sharedTerminalPayload = null)
+    }
+
+    fun sendSharedPayloadToDiagnostic() {
+        val payload = _uiState.value.sharedTerminalPayload ?: _uiState.value.chatInputText
+        if (payload.isNotBlank()) {
+            _uiState.value = _uiState.value.copy(
+                currentTab = VeniceNavTab.INTELLIGENCE,
+                intelligenceTool = "DIAGNOSE_TERMINAL",
+                intelligenceInput = payload,
+                sharedTerminalPayload = null,
+                statusNotice = "Transferred to Terminal Diagnostic Tool"
+            )
+        }
+    }
+
+    // --- OpenAI / ChatGPT OAuth PKCE Actions ---
+
+    fun loadOpenAiSession(context: Context) {
+        val session = OpenAIOAuthManager.loadSession(context)
+        val clientId = OpenAIOAuthManager.getClientId(context)
+        _uiState.value = _uiState.value.copy(
+            openAiSession = session,
+            openAiCustomClientId = clientId
+        )
+    }
+
+    fun startOpenAiPkceLogin(context: Context) {
+        if (_uiState.value.isOpenAiAuthenticating) return
+        _uiState.value = _uiState.value.copy(
+            isOpenAiAuthenticating = true,
+            openAiAuthStatus = "Starting ChatGPT OAuth PKCE flow..."
+        )
+
+        viewModelScope.launch {
+            val result = OpenAIOAuthManager.authenticate(
+                context = context,
+                onStatusUpdate = { status ->
+                    _uiState.value = _uiState.value.copy(openAiAuthStatus = status)
+                }
+            )
+
+            result.onSuccess { session ->
+                _uiState.value = _uiState.value.copy(
+                    openAiSession = session,
+                    isOpenAiAuthenticating = false,
+                    openAiAuthStatus = "Connected to ChatGPT (Account: ${session.accountId.take(12)}...)",
+                    statusNotice = "ChatGPT OAuth PKCE Connected"
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    isOpenAiAuthenticating = false,
+                    openAiAuthStatus = "Authentication failed: ${error.message ?: "Unknown error"}",
+                    statusNotice = "ChatGPT OAuth failed: ${error.message}"
+                )
+            }
+        }
+    }
+
+    fun refreshOpenAiSession(context: Context) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                openAiAuthStatus = "Refreshing OpenAI token with refresh_token..."
+            )
+            val result = OpenAIOAuthManager.refreshIfNeeded(context)
+            result.onSuccess { refreshed ->
+                _uiState.value = _uiState.value.copy(
+                    openAiSession = refreshed,
+                    openAiAuthStatus = "Token refreshed successfully.",
+                    statusNotice = "OpenAI Token Refreshed"
+                )
+            }.onFailure { err ->
+                _uiState.value = _uiState.value.copy(
+                    openAiAuthStatus = "Refresh failed: ${err.message}"
+                )
+            }
+        }
+    }
+
+    fun disconnectOpenAi(context: Context) {
+        OpenAIOAuthManager.clearSession(context)
+        _uiState.value = _uiState.value.copy(
+            openAiSession = null,
+            openAiAuthStatus = null,
+            statusNotice = "ChatGPT OAuth Session Disconnected"
+        )
+    }
+
+    fun updateOpenAiClientId(context: Context, newClientId: String) {
+        OpenAIOAuthManager.setClientId(context, newClientId)
+        _uiState.value = _uiState.value.copy(
+            openAiCustomClientId = newClientId.ifBlank { OpenAIOAuthManager.DEFAULT_CLIENT_ID }
+        )
+    }
+
+    // --- Dynamic Adaptive Framework (DAF) Engine Actions ---
+
+    fun initAdaptiveFramework(context: Context) {
+        val facts = DynamicAdaptiveEngine.loadFacts(context)
+        val isAuto = DynamicAdaptiveEngine.isAutoLearningEnabled(context)
+        val contextPrompt = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = facts,
+            isAutoLearningEnabled = isAuto,
+            dynamicAdaptivePromptContext = contextPrompt
+        )
+    }
+
+    fun learnFromText(context: Context, text: String, source: String = "Terminal / User Input") {
+        if (text.isBlank()) return
+        val discovered = DynamicAdaptiveEngine.autoLearnFromText(context, text, source)
+        val updatedFacts = DynamicAdaptiveEngine.loadFacts(context)
+        val updatedContext = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        val notice = if (discovered.isNotEmpty()) {
+            "Adapted ${discovered.size} runtime fact(s): " + discovered.joinToString { it.key }
+        } else {
+            "Analyzed input: no new runtime deviations detected"
+        }
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = updatedFacts,
+            dynamicAdaptivePromptContext = updatedContext,
+            lastLearnedNotice = notice,
+            statusNotice = notice
+        )
+    }
+
+    fun addCustomAdaptiveFact(
+        context: Context,
+        category: AdaptiveCategory,
+        key: String,
+        value: String
+    ) {
+        if (key.isBlank() || value.isBlank()) return
+        val newFact = AdaptiveFact(
+            category = category,
+            key = key.trim(),
+            value = value.trim(),
+            confidence = 1.0f,
+            source = "Custom User Directive",
+            isEnabled = true
+        )
+        val updated = DynamicAdaptiveEngine.addOrUpdateFact(context, newFact)
+        val updatedContext = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = updated,
+            dynamicAdaptivePromptContext = updatedContext,
+            statusNotice = "Added adaptive rule: ${newFact.key}"
+        )
+    }
+
+    fun removeAdaptiveFact(context: Context, id: String) {
+        val updated = DynamicAdaptiveEngine.removeFact(context, id)
+        val updatedContext = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = updated,
+            dynamicAdaptivePromptContext = updatedContext,
+            statusNotice = "Removed adaptive rule"
+        )
+    }
+
+    fun toggleAdaptiveFact(context: Context, id: String, isEnabled: Boolean) {
+        val updated = DynamicAdaptiveEngine.toggleFact(context, id, isEnabled)
+        val updatedContext = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = updated,
+            dynamicAdaptivePromptContext = updatedContext
+        )
+    }
+
+    fun toggleAutoLearning(context: Context, enabled: Boolean) {
+        DynamicAdaptiveEngine.setAutoLearningEnabled(context, enabled)
+        _uiState.value = _uiState.value.copy(
+            isAutoLearningEnabled = enabled,
+            statusNotice = if (enabled) "Runtime Auto-Learning Activated" else "Runtime Auto-Learning Paused"
+        )
+    }
+
+    fun resetAdaptiveFacts(context: Context) {
+        val defaults = DynamicAdaptiveEngine.resetToDefaults(context)
+        val updatedContext = DynamicAdaptiveEngine.buildAdaptiveContext(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = defaults,
+            dynamicAdaptivePromptContext = updatedContext,
+            statusNotice = "Reset adaptive framework to blueprint defaults"
+        )
+    }
+
+    fun clearAdaptiveFacts(context: Context) {
+        val empty = DynamicAdaptiveEngine.clearAll(context)
+        _uiState.value = _uiState.value.copy(
+            adaptiveFacts = empty,
+            dynamicAdaptivePromptContext = "",
+            statusNotice = "Cleared all adaptive runtime memory"
+        )
     }
 }

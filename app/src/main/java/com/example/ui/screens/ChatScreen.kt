@@ -37,7 +37,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +61,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -74,6 +81,7 @@ import com.example.ui.theme.VeniceTextMuted
 import com.example.ui.theme.VeniceTextPrimary
 import com.example.ui.theme.VeniceTextSecondary
 import com.example.ui.theme.VeniceThinkingPurple
+import com.example.ui.viewmodel.VeniceNavTab
 import com.example.ui.viewmodel.VeniceUiState
 import com.example.ui.viewmodel.VeniceViewModel
 import kotlinx.coroutines.launch
@@ -99,6 +107,39 @@ fun ChatScreen(
                     if (bitmap != null) {
                         viewModel.attachImage(bitmap)
                     }
+                }
+            } catch (e: Exception) {
+                // handle gracefully
+            }
+        }
+    }
+
+    // SAF Document / File Picker (Zero privileged root bypass; securely selects scripts, logs, configs)
+    val documentPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                var fileName = "document.txt"
+                var fileSize = 0L
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (cursor.moveToFirst()) {
+                        if (nameIndex != -1) fileName = cursor.getString(nameIndex) ?: fileName
+                        if (sizeIndex != -1) fileSize = cursor.getLong(sizeIndex)
+                    }
+                }
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bytes = stream.readBytes()
+                    if (fileSize == 0L) fileSize = bytes.size.toLong()
+                    // Cap at ~120KB for responsive context injection
+                    val textContent = if (bytes.size > 120_000) {
+                        String(bytes, 0, 120_000, Charsets.UTF_8) + "\n... [Truncated: File exceeded 120KB]"
+                    } else {
+                        String(bytes, Charsets.UTF_8)
+                    }
+                    viewModel.attachDocument(fileName, textContent, fileSize)
                 }
             } catch (e: Exception) {
                 // handle gracefully
@@ -147,21 +188,139 @@ fun ChatScreen(
                 )
             }
 
-            if (uiState.isHighThinkingEnabled) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Default.Psychology,
-                        contentDescription = null,
-                        tint = VeniceThinkingPurple,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (uiState.injectHardwareProfile && uiState.hardwareProfile.isEnabled) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(VeniceCyan.copy(alpha = 0.15f))
+                            .border(1.dp, VeniceCyan.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                            .clickable { viewModel.setNavTab(VeniceNavTab.PRIVACY_VAULT) }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "SM-A326B Kali",
+                            color = VeniceCyan,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                if (uiState.isHighThinkingEnabled) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Psychology,
+                            contentDescription = null,
+                            tint = VeniceThinkingPurple,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "Thinking On",
+                            color = VeniceThinkingPurple,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Shared NetHunter Payload Banner
+        if (uiState.sharedTerminalPayload != null) {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0A1118)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, VeniceCyan.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Terminal,
+                                contentDescription = null,
+                                tint = VeniceCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Shared from NetHunter Terminal",
+                                color = VeniceCyan,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        IconButton(
+                            onClick = { viewModel.dismissSharedPayload() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Dismiss",
+                                tint = VeniceTextMuted,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     Text(
-                        text = "High Thinking Active",
-                        color = VeniceThinkingPurple,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        text = uiState.sharedTerminalPayload.take(220) + if (uiState.sharedTerminalPayload.length > 220) "..." else "",
+                        color = VeniceTextSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 3
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                viewModel.dismissSharedPayload()
+                                viewModel.sendChatMessage()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = VeniceCyan),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Send to Venice AI",
+                                color = Color.Black,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.sendSharedPayloadToDiagnostic() },
+                            colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "Audit Diagnostic",
+                                color = VeniceCyan,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -282,13 +441,66 @@ fun ChatScreen(
             }
         }
 
+        // Attached Document / Script / Log Preview (SAF)
+        if (uiState.attachedFileName != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(VeniceSurfaceElevated)
+                    .border(1.dp, VeniceCyan.copy(alpha = 0.35f))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(VeniceCyan.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Description,
+                        contentDescription = "Document Attached",
+                        tint = VeniceCyan,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = uiState.attachedFileName ?: "Document",
+                        color = VeniceTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "Script / Log / Config ready for context injection (${(uiState.attachedFileSize / 1024).coerceAtLeast(1)} KB)",
+                        color = VeniceCyan.copy(alpha = 0.8f),
+                        fontSize = 10.sp
+                    )
+                }
+
+                IconButton(onClick = { viewModel.removeAttachedDocument() }) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove Document",
+                        tint = VeniceTextMuted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
         // Input Field & Action Buttons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(VeniceSurface)
                 .border(width = 0.5.dp, color = VeniceBorder)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Attach Photo Button
@@ -299,7 +511,7 @@ fun ChatScreen(
                     )
                 },
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(VeniceSurfaceElevated)
                     .testTag("attach_image_button")
@@ -308,11 +520,32 @@ fun ChatScreen(
                     imageVector = Icons.Default.AddPhotoAlternate,
                     contentDescription = "Attach Photo for Multimodal Vision",
                     tint = if (uiState.attachedImageBitmap != null) VeniceCyan else VeniceTextMuted,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+
+            // Attach Document / Script / Log Button (SAF)
+            IconButton(
+                onClick = {
+                    documentPickerLauncher.launch(arrayOf("*/*"))
+                },
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(VeniceSurfaceElevated)
+                    .testTag("attach_document_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = "Attach Config / Script / Log via SAF",
+                    tint = if (uiState.attachedFileName != null) VeniceCyan else VeniceTextMuted,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Chat Input TextField
             OutlinedTextField(
@@ -349,21 +582,25 @@ fun ChatScreen(
                     .testTag("chat_input_field")
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Send Button
+            val isSendEnabled = (uiState.chatInputText.isNotBlank() || 
+                uiState.attachedImageBase64 != null || 
+                uiState.attachedFileContent != null) && !uiState.isGeneratingChat
+
             IconButton(
                 onClick = {
                     if (!uiState.isGeneratingChat) {
                         viewModel.sendChatMessage()
                     }
                 },
-                enabled = (uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat,
+                enabled = isSendEnabled,
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(
-                        if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat)
+                        if (isSendEnabled)
                             (if (uiState.isHighThinkingEnabled) VeniceThinkingPurple else VeniceAmber)
                         else VeniceSurfaceElevated
                     )
@@ -372,8 +609,7 @@ fun ChatScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send Message",
-                    tint = if ((uiState.chatInputText.isNotBlank() || uiState.attachedImageBase64 != null) && !uiState.isGeneratingChat)
-                        Color.Black else VeniceTextMuted,
+                    tint = if (isSendEnabled) Color.Black else VeniceTextMuted,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -386,10 +622,11 @@ private fun QuickSuggestionChips(
     onPromptSelected: (String) -> Unit
 ) {
     val suggestions = listOf(
+        "Diagnose terminal log or dmesg trace",
+        "Audit bash automation script",
+        "Analyze iptables & network routing",
         "Analyze zero-knowledge cryptography",
-        "Explain quantum encryption protocols",
         "Audit my smart contract logic",
-        "Compare decentralization trade-offs",
         "Write a Python neural network from scratch"
     )
 

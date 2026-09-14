@@ -1,9 +1,12 @@
 package com.example
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -33,12 +36,51 @@ import com.example.ui.viewmodel.VeniceNavTab
 import com.example.ui.viewmodel.VeniceViewModel
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: VeniceViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        viewModel.loadOpenAiSession(this)
+        viewModel.initAdaptiveFramework(this)
+        handleIncomingIntent(intent)
         setContent {
             VeniceTheme {
-                VeniceApp()
+                VeniceApp(viewModel = viewModel)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private fun handleIncomingIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.action == Intent.ACTION_SEND) {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!sharedText.isNullOrBlank()) {
+                viewModel.handleIncomingSharedContent(sharedText)
+                return
+            }
+
+            @Suppress("DEPRECATION")
+            val streamUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            if (streamUri != null) {
+                try {
+                    contentResolver.openInputStream(streamUri)?.bufferedReader()?.use { reader ->
+                        val buffer = CharArray(65536)
+                        val numRead = reader.read(buffer, 0, buffer.size)
+                        if (numRead > 0) {
+                            val content = String(buffer, 0, numRead)
+                            viewModel.handleIncomingSharedContent(content)
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Safely ignore file read errors
+                }
             }
         }
     }

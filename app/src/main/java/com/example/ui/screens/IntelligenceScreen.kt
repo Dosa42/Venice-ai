@@ -3,10 +3,14 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +28,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ShortText
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -85,6 +94,38 @@ fun IntelligenceScreen(
 
     val tools = listOf(
         IntelToolConfig(
+            id = "DYNAMIC_RUNTIME_ADAPT",
+            title = "Dynamic Adaptive Extractor",
+            subtitle = "Extracts newly discovered interfaces, drivers & tools into runtime memory",
+            modelBadge = "gemini-3.1-pro-preview",
+            icon = Icons.Default.Psychology,
+            accentColor = VeniceCyan
+        ),
+        IntelToolConfig(
+            id = "TERMINAL_LOG_DIAGNOSTIC",
+            title = "Terminal & Kernel Diagnostic",
+            subtitle = "Diagnoses root causes in dmesg, error codes, and tool logs",
+            modelBadge = "gemini-3.1-pro-preview",
+            icon = Icons.Default.Terminal,
+            accentColor = VeniceCyan
+        ),
+        IntelToolConfig(
+            id = "SHELL_SCRIPT_AUDIT",
+            title = "Shell & Automation Auditor",
+            subtitle = "Hardens bash, zsh, and python automation scripts",
+            modelBadge = "gemini-3.1-pro-preview",
+            icon = Icons.Default.Code,
+            accentColor = VeniceAmber
+        ),
+        IntelToolConfig(
+            id = "NETWORK_CONFIG_ANALYZER",
+            title = "Network & Routing Analyzer",
+            subtitle = "Decodes ifconfig, routes, iptables, and nmap outputs",
+            modelBadge = "gemini-3.5-flash",
+            icon = Icons.Default.Hub,
+            accentColor = VeniceThinkingPurple
+        ),
+        IntelToolConfig(
             id = "ENHANCE_PROMPT",
             title = "Venice Magic Prompt",
             subtitle = "Rewrites raw ideas into high-fidelity artistic prompts",
@@ -119,6 +160,35 @@ fun IntelligenceScreen(
     )
 
     val currentToolConfig = tools.find { it.id == uiState.intelligenceTool } ?: tools.first()
+
+    // SAF Document Loader for text logs, configs, and scripts
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                var fileName = "imported_file.txt"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst() && nameIndex != -1) {
+                        fileName = cursor.getString(nameIndex) ?: fileName
+                    }
+                }
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val bytes = stream.readBytes()
+                    val textContent = if (bytes.size > 120_000) {
+                        String(bytes, 0, 120_000, Charsets.UTF_8) + "\n... [Truncated: File exceeded 120KB]"
+                    } else {
+                        String(bytes, Charsets.UTF_8)
+                    }
+                    viewModel.setIntelligenceInput(textContent)
+                    Toast.makeText(context, "Loaded $fileName into buffer", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to read file", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -232,14 +302,81 @@ fun IntelligenceScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Input for ${currentToolConfig.title}",
-                    color = VeniceTextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Input for ${currentToolConfig.title}",
+                        color = VeniceTextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+
+                    // Import file via SAF button
+                    Button(
+                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                        colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.UploadFile,
+                            contentDescription = "Import File",
+                            tint = VeniceCyan,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Import File", color = VeniceCyan, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // Presets row for rapid testing
+                Text(
+                    text = "Quick Presets & NetHunter Logs:",
+                    color = VeniceTextMuted,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val presets = listOf(
+                        "Nmap Scan" to ("PORT STATE SERVICE\n22/tcp open ssh\n80/tcp open http\n443/tcp open https\n8080/tcp filtered http-proxy\nOS details: Linux 5.4.0 (Ubuntu)\nAggressive OS guesses: Linux 4.15 - 5.8"),
+                        "dmesg OOM Log" to ("[10423.412091] Out of memory: Killed process 8492 (chroot_worker) total-vm:2451928kB, anon-rss:189404kB\n[10423.412105] oom_reaper: reaped process 8492\n[10423.412120] kernel: [Hardware Error]: CPU 0: Machine Check: 0 Bank 4"),
+                        "Bash Root Script" to ("#!/usr/bin/env bash\nset -e\nif [ \"\$(id -u)\" -ne 0 ]; then\n  echo \"Error: Must run as root.\"\n  exit 1\nfi\nTARGET_DIR=\"/opt/nethunter/scripts\"\nmkdir -p \"\$TARGET_DIR\"\nchmod 750 \"\$TARGET_DIR\""),
+                        "iptables NAT" to ("Chain PREROUTING (policy ACCEPT)\ntarget prot opt in out source destination\nDNAT tcp -- wlan0 any 0.0.0.0/0 0.0.0.0/0 tcp dpt:80 to:192.168.1.50:8080\nChain POSTROUTING (policy ACCEPT)\nMASQUERADE all -- any rmnet_data0 0.0.0.0/0 0.0.0.0/0")
+                    )
+
+                    presets.forEach { (label, content) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(VeniceSurfaceElevated)
+                                .border(1.dp, VeniceBorder, RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.setIntelligenceInput(content)
+                                    when (label) {
+                                        "Nmap Scan", "iptables NAT" -> viewModel.setIntelligenceTool("NETWORK_CONFIG_ANALYZER")
+                                        "dmesg OOM Log" -> viewModel.setIntelligenceTool("TERMINAL_LOG_DIAGNOSTIC")
+                                        "Bash Root Script" -> viewModel.setIntelligenceTool("SHELL_SCRIPT_AUDIT")
+                                    }
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(text = label, color = VeniceTextSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
 
                 OutlinedTextField(
                     value = uiState.intelligenceInput,
@@ -247,11 +384,14 @@ fun IntelligenceScreen(
                     placeholder = {
                         Text(
                             text = when (uiState.intelligenceTool) {
+                                "TERMINAL_LOG_DIAGNOSTIC" -> "Paste terminal error trace, dmesg log, or command output..."
+                                "SHELL_SCRIPT_AUDIT" -> "Paste bash, zsh, or python script to audit and harden..."
+                                "NETWORK_CONFIG_ANALYZER" -> "Paste ifconfig, iptables, ip route, or nmap scan output..."
                                 "ENHANCE_PROMPT" -> "Enter draft prompt (e.g. 'Venice cyberpunk night')..."
                                 "SUMMARIZE" -> "Paste raw text, articles, or notes here..."
                                 "PRIVACY_AUDIT" -> "Paste system architecture, query, or app behavior to audit..."
                                 "CODE_REFACTOR" -> "Paste code snippet to inspect and refactor..."
-                                else -> "Enter input..."
+                                else -> "Enter input or import file above..."
                             },
                             color = VeniceTextMuted,
                             fontSize = 13.sp
@@ -373,9 +513,10 @@ fun IntelligenceScreen(
                         lineHeight = 20.sp
                     )
 
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     // Quick Actions based on tool
                     if (uiState.intelligenceTool == "ENHANCE_PROMPT") {
-                        Spacer(modifier = Modifier.height(12.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -396,6 +537,53 @@ fun IntelligenceScreen(
                                 modifier = Modifier.weight(1f)
                             ) {
                                 Text("Use in Studio", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // For Terminal, Script, Network, and Audit tools: Send to Venice Chat or commit to DAF memory
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    viewModel.sendAnalysisToChat(currentToolConfig.title, uiState.intelligenceOutput)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = currentToolConfig.accentColor),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Chat,
+                                    contentDescription = null,
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Discuss in Chat", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.learnFromText(
+                                        context,
+                                        uiState.intelligenceOutput + "\n" + uiState.intelligenceInput,
+                                        "Intelligence: ${currentToolConfig.title}"
+                                    )
+                                    Toast.makeText(context, "Runtime memory adapted from diagnostic trace", Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Psychology,
+                                    contentDescription = null,
+                                    tint = VeniceCyan,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Commit to DAF", color = VeniceCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
