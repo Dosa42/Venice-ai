@@ -13,6 +13,9 @@ import com.example.data.auth.OpenAIOAuthManager
 import com.example.data.auth.OpenAIOAuthSession
 import com.example.data.firebase.FirebaseManager
 import com.example.data.introspection.CodebaseManifestEngine
+import com.example.data.skills.AdaptivePromptEngine
+import com.example.data.skills.NativeSkillsEngine
+import com.example.data.skills.PromptHookResult
 import com.example.data.model.ChatMessage
 import com.example.data.model.ChatSession
 import com.example.data.model.GeneratedArt
@@ -96,7 +99,12 @@ data class VeniceUiState(
 
     // Metacognitive Codebase Self-Awareness Engine
     val isSelfAwarenessEnabled: Boolean = true,
-    val selectedIntrospectionFile: String? = null
+    val selectedIntrospectionFile: String? = null,
+
+    // Native Android Skills & Adaptive Prompt Engine
+    val skillsInjectionMode: AdaptivePromptEngine.InjectionMode = AdaptivePromptEngine.InjectionMode.ADAPTIVE,
+    val enabledNativeSkills: Set<String> = NativeSkillsEngine.SKILLS.map { it.id }.toSet(),
+    val lastPromptHookResult: PromptHookResult? = null
 )
 
 class VeniceViewModel : ViewModel() {
@@ -337,7 +345,21 @@ class VeniceViewModel : ViewModel() {
             val selfAwarenessPart = if (_uiState.value.isSelfAwarenessEnabled) {
                 "\n\n${CodebaseManifestEngine.buildSelfIntrospectionContext(_uiState.value.selectedIntrospectionFile)}"
             } else ""
-            val effectiveSystemPrompt = "$basePrompt$hardwarePart$adaptivePart$selfAwarenessPart"
+
+            val skillsHookResult = AdaptivePromptEngine.synthesizePromptHook(
+                userQuery = fullText,
+                mode = _uiState.value.skillsInjectionMode,
+                manualSelectedSkills = _uiState.value.enabledNativeSkills
+            )
+            val skillsPart = if (skillsHookResult.promptContext.isNotBlank()) {
+                "\n\n${skillsHookResult.promptContext}"
+            } else ""
+
+            val effectiveSystemPrompt = "$basePrompt$hardwarePart$adaptivePart$selfAwarenessPart$skillsPart"
+
+            _uiState.value = _uiState.value.copy(
+                lastPromptHookResult = skillsHookResult
+            )
 
             val result = GeminiApi.generateChatResponse(
                 modelName = modelName,
@@ -896,6 +918,35 @@ class VeniceViewModel : ViewModel() {
     fun selectIntrospectionFile(path: String?) {
         _uiState.value = _uiState.value.copy(
             selectedIntrospectionFile = path
+        )
+    }
+
+    // --- Native Skills Adaptive Prompt Engine Actions ---
+
+    fun setSkillsInjectionMode(mode: AdaptivePromptEngine.InjectionMode) {
+        _uiState.value = _uiState.value.copy(
+            skillsInjectionMode = mode,
+            statusNotice = "Skills Prompt Mode: ${mode.title}"
+        )
+    }
+
+    fun toggleNativeSkill(skillId: String) {
+        val current = _uiState.value.enabledNativeSkills.toMutableSet()
+        if (current.contains(skillId)) {
+            current.remove(skillId)
+        } else {
+            current.add(skillId)
+        }
+        _uiState.value = _uiState.value.copy(
+            enabledNativeSkills = current,
+            statusNotice = "Updated active skills (${current.size}/${NativeSkillsEngine.SKILLS.size})"
+        )
+    }
+
+    fun enableAllNativeSkills() {
+        _uiState.value = _uiState.value.copy(
+            enabledNativeSkills = NativeSkillsEngine.SKILLS.map { it.id }.toSet(),
+            statusNotice = "Enabled all 6 core Android skills"
         )
     }
 }

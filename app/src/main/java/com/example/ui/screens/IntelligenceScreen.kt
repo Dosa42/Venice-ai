@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.components.NativeSkillsHookCard
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBackground
 import com.example.ui.theme.VeniceBorder
@@ -242,6 +243,16 @@ fun IntelligenceScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        // Native Skills Adaptive Prompt Engine Hook
+        NativeSkillsHookCard(
+            currentMode = uiState.skillsInjectionMode,
+            enabledSkills = uiState.enabledNativeSkills,
+            lastHookResult = uiState.lastPromptHookResult,
+            onModeChanged = { viewModel.setSkillsInjectionMode(it) },
+            onSkillToggled = { viewModel.toggleNativeSkill(it) },
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
 
         // Tool Selector Grid
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

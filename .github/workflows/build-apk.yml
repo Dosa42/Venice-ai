@@ -28,11 +28,11 @@ on:
       java_version:
         description: "JDK version to use"
         required: false
-        default: "17"
+        default: "21"
         type: choice
         options:
-          - "17"
           - "21"
+          - "17"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,11 +50,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Set up Java JDK ${{ inputs.java_version || '17' }}
-        uses: actions/setup-java@v4
+      - name: Set up Java JDK ${{ inputs.java_version || '21' }}
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: ${{ inputs.java_version || '17' }}
+          java-version: ${{ inputs.java_version || '21' }}
 
       - name: Setup Android SDK Tools
         uses: android-actions/setup-android@v3
