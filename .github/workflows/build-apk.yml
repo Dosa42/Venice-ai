@@ -81,24 +81,25 @@ jobs:
 
       - name: Run Clean (Optional)
         if: ${{ inputs.clean_build == true }}
-        run: $GRADLE_CMD clean --no-daemon
+        run: $GRADLE_CMD clean
 
       - name: Run Android Lint (Optional)
         if: ${{ inputs.run_lint == true }}
-        run: $GRADLE_CMD lintDebug --no-daemon || true
+        run: $GRADLE_CMD lintDebug || true
 
       - name: Assemble Debug APK
         if: ${{ (inputs.build_variant || 'debug') == 'debug' }}
         run: |
-          $GRADLE_CMD assembleDebug --stacktrace --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx3072m -XX:+UseParallelGC"
+          $GRADLE_CMD assembleDebug --stacktrace \
+            -Djava.awt.headless=true
 
       - name: Assemble Release APK (Unsigned/Debug-signed)
         if: ${{ inputs.build_variant == 'release' }}
         run: |
-          $GRADLE_CMD assembleRelease --stacktrace --no-daemon \
-            -Dorg.gradle.jvmargs="-Xmx3072m -XX:+UseParallelGC" || \
-          $GRADLE_CMD assembleDebug --stacktrace --no-daemon
+          $GRADLE_CMD assembleRelease --stacktrace \
+            -Djava.awt.headless=true || \
+          $GRADLE_CMD assembleDebug --stacktrace \
+            -Djava.awt.headless=true
 
       - name: Discover and Verify Output APK
         id: apk-finder
