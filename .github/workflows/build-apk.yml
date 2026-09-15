@@ -87,6 +87,16 @@ jobs:
         if: ${{ inputs.run_lint == true }}
         run: $GRADLE_CMD lintDebug || true
 
+      - name: Restore debug signing keystore
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" \
+            | base64 --decode > "$GITHUB_WORKSPACE/debug.keystore"
+
       - name: Assemble Debug APK
         if: ${{ (inputs.build_variant || 'debug') == 'debug' }}
         run: |
