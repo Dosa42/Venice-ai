@@ -906,7 +906,6 @@ class VeniceViewModel : ViewModel() {
 
     fun startOpenAiPkceLogin(context: Context) {
         appContext = context.applicationContext
-        if (_uiState.value.isOpenAiAuthenticating) return
         _uiState.value = _uiState.value.copy(
             isOpenAiAuthenticating = true,
             openAiAuthStatus = "Starting ChatGPT OAuth PKCE flow..."
