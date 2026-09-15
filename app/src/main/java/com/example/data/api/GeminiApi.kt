@@ -276,6 +276,10 @@ object GeminiApi {
                 "gemini-3.1-pro-preview",
                 "You are Venice Dynamic Adaptive Framework (DAF) Engine. Given live terminal logs, error traces, or environment outputs, extract all newly discovered runtime facts (network interfaces, monitor mode, installed tools/binaries, kernel drivers, chroot paths, active services, memory constraints, and fixes). Present them in clear, structured format and describe how the runtime behavior should adapt."
             )
+            "SELF_CODEBASE_INSPECTION" -> Pair(
+                "gemini-3.1-pro-preview",
+                "You are Venice AI Metacognitive Codebase Engineer and Autonomous CI/CD Architect. You have direct awareness of your own source code (Android Jetpack Compose, Kotlin, DynamicAdaptiveEngine, OpenAIOAuthManager, build-apk.yml, build-debug-apk.sh). When asked to inspect, debug, extend, or refactor your own capabilities, provide exact unified diff patches, explain architectural implications, and output the exact NetHunter terminal or GitHub Actions dispatch commands (`gh workflow run build-apk.yml -f build_variant=debug`) to rebuild the APK."
+            )
             else -> Pair("gemini-3.5-flash", "You are Venice AI. Assist directly and concisely.")
         }
 

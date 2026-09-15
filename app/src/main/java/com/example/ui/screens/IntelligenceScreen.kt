@@ -94,6 +94,14 @@ fun IntelligenceScreen(
 
     val tools = listOf(
         IntelToolConfig(
+            id = "SELF_CODEBASE_INSPECTION",
+            title = "Self-Codebase & Patch Generator",
+            subtitle = "Inspects internal source files, generates diffs & GitHub rebuild commands",
+            modelBadge = "gemini-3.1-pro-preview",
+            icon = Icons.Default.Code,
+            accentColor = VeniceThinkingPurple
+        ),
+        IntelToolConfig(
             id = "DYNAMIC_RUNTIME_ADAPT",
             title = "Dynamic Adaptive Extractor",
             subtitle = "Extracts newly discovered interfaces, drivers & tools into runtime memory",
@@ -349,6 +357,7 @@ fun IntelligenceScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     val presets = listOf(
+                        "Self-Patch & Rebuild" to ("Inspect your own DynamicAdaptiveEngine.kt and build-apk.yml. How do we add Bluetooth LE extraction into runtime memory, and what are the exact commands to build the new APK via GitHub Actions?"),
                         "Nmap Scan" to ("PORT STATE SERVICE\n22/tcp open ssh\n80/tcp open http\n443/tcp open https\n8080/tcp filtered http-proxy\nOS details: Linux 5.4.0 (Ubuntu)\nAggressive OS guesses: Linux 4.15 - 5.8"),
                         "dmesg OOM Log" to ("[10423.412091] Out of memory: Killed process 8492 (chroot_worker) total-vm:2451928kB, anon-rss:189404kB\n[10423.412105] oom_reaper: reaped process 8492\n[10423.412120] kernel: [Hardware Error]: CPU 0: Machine Check: 0 Bank 4"),
                         "Bash Root Script" to ("#!/usr/bin/env bash\nset -e\nif [ \"\$(id -u)\" -ne 0 ]; then\n  echo \"Error: Must run as root.\"\n  exit 1\nfi\nTARGET_DIR=\"/opt/nethunter/scripts\"\nmkdir -p \"\$TARGET_DIR\"\nchmod 750 \"\$TARGET_DIR\""),
@@ -364,6 +373,7 @@ fun IntelligenceScreen(
                                 .clickable {
                                     viewModel.setIntelligenceInput(content)
                                     when (label) {
+                                        "Self-Patch & Rebuild" -> viewModel.setIntelligenceTool("SELF_CODEBASE_INSPECTION")
                                         "Nmap Scan", "iptables NAT" -> viewModel.setIntelligenceTool("NETWORK_CONFIG_ANALYZER")
                                         "dmesg OOM Log" -> viewModel.setIntelligenceTool("TERMINAL_LOG_DIAGNOSTIC")
                                         "Bash Root Script" -> viewModel.setIntelligenceTool("SHELL_SCRIPT_AUDIT")
@@ -384,6 +394,7 @@ fun IntelligenceScreen(
                     placeholder = {
                         Text(
                             text = when (uiState.intelligenceTool) {
+                                "SELF_CODEBASE_INSPECTION" -> "Ask how internal features work, request a code patch diff, or generate rebuild commands..."
                                 "TERMINAL_LOG_DIAGNOSTIC" -> "Paste terminal error trace, dmesg log, or command output..."
                                 "SHELL_SCRIPT_AUDIT" -> "Paste bash, zsh, or python script to audit and harden..."
                                 "NETWORK_CONFIG_ANALYZER" -> "Paste ifconfig, iptables, ip route, or nmap scan output..."

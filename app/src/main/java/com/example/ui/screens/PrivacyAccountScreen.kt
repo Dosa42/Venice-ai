@@ -68,6 +68,7 @@ import com.example.data.auth.OpenAIOAuthSession
 import com.example.data.model.NetHunterHardwareProfile
 import com.example.ui.components.AdaptiveGitHubRunnerCard
 import com.example.ui.components.DynamicAdaptiveFrameworkCard
+import com.example.ui.components.MetacognitiveCodebaseCard
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBackground
 import com.example.ui.theme.VeniceBorder
@@ -338,6 +339,16 @@ fun PrivacyAccountScreen(
 
         // Dynamic Adaptive GitHub Workflow Action Runner Card
         AdaptiveGitHubRunnerCard()
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Metacognitive Codebase Self-Introspection Card
+        MetacognitiveCodebaseCard(
+            isSelfAwarenessEnabled = uiState.isSelfAwarenessEnabled,
+            selectedFilePath = uiState.selectedIntrospectionFile,
+            onToggleSelfAwareness = { viewModel.toggleSelfAwareness(it) },
+            onSelectFile = { viewModel.selectIntrospectionFile(it) }
+        )
 
         Spacer(modifier = Modifier.height(14.dp))
 

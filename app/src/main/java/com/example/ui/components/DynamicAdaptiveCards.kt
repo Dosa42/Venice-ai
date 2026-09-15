@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.adaptive.AdaptiveCategory
 import com.example.data.adaptive.AdaptiveFact
+import com.example.data.introspection.CodebaseManifestEngine
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBorder
 import com.example.ui.theme.VeniceCyan
@@ -75,6 +76,7 @@ import com.example.ui.theme.VenicePrivacyGreen
 import com.example.ui.theme.VeniceRose
 import com.example.ui.theme.VeniceSurface
 import com.example.ui.theme.VeniceSurfaceElevated
+import com.example.ui.theme.VeniceSurfaceHighlight
 import com.example.ui.theme.VeniceTextMuted
 import com.example.ui.theme.VeniceTextPrimary
 import com.example.ui.theme.VeniceTextSecondary
@@ -879,5 +881,320 @@ jobs:
                 }
             }
         }
+    }
+}
+
+/**
+ * Metacognitive Codebase Introspection Card.
+ * Allows inspecting the AI's exact internal source files, copying full modules,
+ * and viewing the autonomous rebuild runbook.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MetacognitiveCodebaseCard(
+    isSelfAwarenessEnabled: Boolean,
+    selectedFilePath: String?,
+    onToggleSelfAwareness: (Boolean) -> Unit,
+    onSelectFile: (String?) -> Unit
+) {
+    val context = LocalContext.current
+    var isExpanded by remember { mutableStateOf(false) }
+    var showRunbookDialog by remember { mutableStateOf(false) }
+
+    val registeredFiles = remember { CodebaseManifestEngine.REGISTERED_FILES }
+    val currentFile = registeredFiles.find { it.path == selectedFilePath } ?: registeredFiles.first()
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = VeniceSurface),
+        border = BorderStroke(1.dp, VeniceThinkingPurple.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(VeniceThinkingPurple.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Code,
+                            contentDescription = null,
+                            tint = VeniceThinkingPurple,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Codebase Self-Introspection",
+                                color = VeniceTextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (isSelfAwarenessEnabled) VeniceThinkingPurple.copy(alpha = 0.2f)
+                                        else VeniceAmber.copy(alpha = 0.2f)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = if (isSelfAwarenessEnabled) "META: ACTIVE" else "META: OFF",
+                                    color = if (isSelfAwarenessEnabled) VeniceThinkingPurple else VeniceAmber,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Live Source Code, Quine Awareness & Rebuild Runbook",
+                            color = VeniceTextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Provides Venice AI with direct live awareness of its own source code, architecture classes, and GitHub Actions build runners for real-time debugging, tool creation, and self-patching.",
+                color = VeniceTextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Metacognition Toggle Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(VeniceSurfaceElevated)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Inject Own Source Code & Architecture",
+                        color = VeniceTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Enables the AI to generate exact unified diff patches & rebuild commands",
+                        color = VeniceTextMuted,
+                        fontSize = 10.sp
+                    )
+                }
+                Switch(
+                    checked = isSelfAwarenessEnabled,
+                    onCheckedChange = onToggleSelfAwareness,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = VeniceThinkingPurple,
+                        checkedTrackColor = VeniceThinkingPurple.copy(alpha = 0.3f),
+                        uncheckedThumbColor = VeniceTextMuted,
+                        uncheckedTrackColor = VeniceSurface
+                    ),
+                    modifier = Modifier.testTag("metacognition_switch")
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // File Selector Chips
+            Text(
+                text = "Inspect Source File:",
+                color = VeniceTextSecondary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                registeredFiles.forEach { file ->
+                    val isSelected = (selectedFilePath == file.path) || (selectedFilePath == null && file == registeredFiles.first())
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) VeniceSurfaceHighlight else VeniceSurfaceElevated)
+                            .border(
+                                1.dp,
+                                if (isSelected) VeniceThinkingPurple else VeniceBorder,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { onSelectFile(file.path) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = file.displayName,
+                                color = if (isSelected) VeniceThinkingPurple else VeniceTextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = file.description,
+                                color = VeniceTextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(VeniceThinkingPurple.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = file.category,
+                                color = VeniceThinkingPurple,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText(currentFile.displayName, currentFile.content))
+                        Toast.makeText(context, "Copied ${currentFile.displayName} source to clipboard", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = null,
+                        tint = VeniceCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Copy Source", color = VeniceCyan, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                Button(
+                    onClick = { showRunbookDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Terminal,
+                        contentDescription = null,
+                        tint = VeniceThinkingPurple,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Rebuild Runbook", color = VeniceThinkingPurple, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Expandable Code Preview
+            Text(
+                text = if (isExpanded) "Hide Source Code" else "View Source Code (${currentFile.displayName})",
+                color = VeniceCyan,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { isExpanded = !isExpanded }
+            )
+
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF090D14))
+                        .border(1.dp, VeniceBorder, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        text = currentFile.content,
+                        color = VeniceTextSecondary,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+        }
+    }
+
+    // Rebuild Runbook Dialog
+    if (showRunbookDialog) {
+        val runbookText = remember { CodebaseManifestEngine.getRebuildRunbook() }
+        AlertDialog(
+            onDismissRequest = { showRunbookDialog = false },
+            title = {
+                Text("Autonomous Rebuild Runbook", color = VeniceTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF090E16))
+                        .padding(12.dp)
+                ) {
+                    Text(
+                        text = runbookText,
+                        color = VeniceTextSecondary,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 15.sp
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Rebuild Runbook", runbookText))
+                        Toast.makeText(context, "Copied rebuild runbook to clipboard", Toast.LENGTH_SHORT).show()
+                        showRunbookDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = VeniceThinkingPurple)
+                ) {
+                    Text("Copy Runbook", color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRunbookDialog = false }) {
+                    Text("Close", color = VeniceTextMuted)
+                }
+            },
+            containerColor = VeniceSurface
+        )
     }
 }

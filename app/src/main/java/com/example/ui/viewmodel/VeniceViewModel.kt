@@ -12,6 +12,7 @@ import com.example.data.api.GeminiApi
 import com.example.data.auth.OpenAIOAuthManager
 import com.example.data.auth.OpenAIOAuthSession
 import com.example.data.firebase.FirebaseManager
+import com.example.data.introspection.CodebaseManifestEngine
 import com.example.data.model.ChatMessage
 import com.example.data.model.ChatSession
 import com.example.data.model.GeneratedArt
@@ -91,7 +92,11 @@ data class VeniceUiState(
     val adaptiveFacts: List<AdaptiveFact> = emptyList(),
     val isAutoLearningEnabled: Boolean = true,
     val lastLearnedNotice: String? = null,
-    val dynamicAdaptivePromptContext: String = ""
+    val dynamicAdaptivePromptContext: String = "",
+
+    // Metacognitive Codebase Self-Awareness Engine
+    val isSelfAwarenessEnabled: Boolean = true,
+    val selectedIntrospectionFile: String? = null
 )
 
 class VeniceViewModel : ViewModel() {
@@ -329,7 +334,10 @@ class VeniceViewModel : ViewModel() {
             val adaptivePart = if (_uiState.value.dynamicAdaptivePromptContext.isNotBlank()) {
                 "\n\n${_uiState.value.dynamicAdaptivePromptContext}"
             } else ""
-            val effectiveSystemPrompt = "$basePrompt$hardwarePart$adaptivePart"
+            val selfAwarenessPart = if (_uiState.value.isSelfAwarenessEnabled) {
+                "\n\n${CodebaseManifestEngine.buildSelfIntrospectionContext(_uiState.value.selectedIntrospectionFile)}"
+            } else ""
+            val effectiveSystemPrompt = "$basePrompt$hardwarePart$adaptivePart$selfAwarenessPart"
 
             val result = GeminiApi.generateChatResponse(
                 modelName = modelName,
@@ -475,6 +483,10 @@ class VeniceViewModel : ViewModel() {
             if (_uiState.value.dynamicAdaptivePromptContext.isNotBlank()) {
                 if (isNotEmpty()) append("\n\n")
                 append(_uiState.value.dynamicAdaptivePromptContext)
+            }
+            if (_uiState.value.isSelfAwarenessEnabled || _uiState.value.intelligenceTool == "SELF_CODEBASE_INSPECTION") {
+                if (isNotEmpty()) append("\n\n")
+                append(CodebaseManifestEngine.buildSelfIntrospectionContext(_uiState.value.selectedIntrospectionFile))
             }
         }.takeIf { it.isNotBlank() }
 
@@ -869,6 +881,21 @@ class VeniceViewModel : ViewModel() {
             adaptiveFacts = empty,
             dynamicAdaptivePromptContext = "",
             statusNotice = "Cleared all adaptive runtime memory"
+        )
+    }
+
+    // --- Metacognitive Codebase Self-Awareness Actions ---
+
+    fun toggleSelfAwareness(enabled: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isSelfAwarenessEnabled = enabled,
+            statusNotice = if (enabled) "Metacognitive Codebase Introspection Enabled" else "Codebase Introspection Disabled"
+        )
+    }
+
+    fun selectIntrospectionFile(path: String?) {
+        _uiState.value = _uiState.value.copy(
+            selectedIntrospectionFile = path
         )
     }
 }
