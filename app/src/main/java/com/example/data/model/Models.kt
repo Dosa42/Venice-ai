@@ -120,6 +120,8 @@ data class ChatSession(
     val personaId: String = "venice_unfiltered",
     val selectedModel: String = VeniceModel.BALANCED.id,
     val highThinkingEnabled: Boolean = false,
+    val useChatGpt: Boolean = false,
+    val reasoningEffort: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val messages: List<ChatMessage> = emptyList()

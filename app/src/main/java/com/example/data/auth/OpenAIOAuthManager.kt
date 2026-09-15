@@ -1,5 +1,8 @@
 package com.example.data.auth
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -53,6 +56,8 @@ data class OpenAIOAuthSession(
  * Uses system browser login and local loopback callback server on 127.0.0.1:1455.
  */
 object OpenAIOAuthManager {
+    private val refreshMutex = Mutex()
+    private val sessionLock = Any()
     const val DEFAULT_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
     const val AUTH_ENDPOINT = "https://auth.openai.com/oauth/authorize"
     const val TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token"
@@ -208,7 +213,7 @@ object OpenAIOAuthManager {
         }
     }
 
-    fun saveSession(context: Context, session: OpenAIOAuthSession) {
+    fun saveSession(context: Context, session: OpenAIOAuthSession) = synchronized(sessionLock) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putString(KEY_SESSION, session.encodeForStorage()).apply()
     }
@@ -219,7 +224,7 @@ object OpenAIOAuthManager {
         return decodeStoredSession(stored)
     }
 
-    fun clearSession(context: Context) {
+    fun clearSession(context: Context) = synchronized(sessionLock) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().remove(KEY_SESSION).apply()
     }
@@ -246,28 +251,41 @@ object OpenAIOAuthManager {
         }
     }
 
-    suspend fun refreshIfNeeded(context: Context): Result<OpenAIOAuthSession> = withContext(Dispatchers.IO) {
-        val session = loadSession(context)
-            ?: return@withContext Result.failure(Exception("No stored OpenAI OAuth session found. Please log in."))
-        val now = System.currentTimeMillis() / 1000L
-        if (session.expiresAtEpochSeconds == 0L || session.expiresAtEpochSeconds > now + 300L) {
-            return@withContext Result.success(session)
+    suspend fun refreshIfNeeded(
+        context: Context,
+        rejectedAccessToken: String? = null
+    ): Result<OpenAIOAuthSession> = refreshMutex.withLock {
+        withContext(Dispatchers.IO) {
+            try {
+                val session = loadSession(context)
+                    ?: return@withContext Result.failure(Exception("No stored ChatGPT session. Please log in."))
+                val now = System.currentTimeMillis() / 1000L
+                val force = rejectedAccessToken != null && rejectedAccessToken == session.accessToken
+                if (!force && (session.expiresAtEpochSeconds == 0L || session.expiresAtEpochSeconds > now + 300L)) {
+                    return@withContext Result.success(session)
+                }
+                if (session.refreshToken.isBlank()) {
+                    return@withContext Result.failure(Exception("ChatGPT session expired. Please log in again."))
+                }
+                val body = FormBody.Builder()
+                    .add("grant_type", "refresh_token")
+                    .add("client_id", getClientId(context))
+                    .add("refresh_token", session.refreshToken).build()
+                val updated = exchangeTokenRequest(body, previous = session).getOrThrow()
+                synchronized(sessionLock) {
+                    if (loadSession(context) != session) {
+                        Result.failure(Exception("ChatGPT session changed during refresh. Please retry."))
+                    } else {
+                        saveSession(context, updated)
+                        Result.success(updated)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
-        if (session.refreshToken.isBlank()) {
-            return@withContext Result.failure(Exception("The OpenAI session expired and has no refresh token. Please re-authenticate."))
-        }
-
-        val clientId = getClientId(context)
-        val body = FormBody.Builder()
-            .add("grant_type", "refresh_token")
-            .add("client_id", clientId)
-            .add("refresh_token", session.refreshToken)
-            .build()
-        val result = exchangeTokenRequest(body, previous = session)
-        result.onSuccess { updated ->
-            saveSession(context, updated)
-        }
-        result
     }
 
     private fun exchangeCodeForTokens(

@@ -1,5 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.TextButton
+import com.example.ui.viewmodel.VeniceUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -53,7 +58,11 @@ fun ModelSelectorDialog(
     isHighThinking: Boolean,
     onSelectModel: (VeniceModel) -> Unit,
     onToggleHighThinking: (Boolean) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    chatState: VeniceUiState? = null,
+    onSelectChatGptModel: (String) -> Unit = {},
+    onSelectReasoning: (String) -> Unit = {},
+    onRefreshChatGptModels: () -> Unit = {}
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -68,6 +77,8 @@ fun ModelSelectorDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 600.dp)
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
                 Row(
@@ -100,6 +111,50 @@ fun ModelSelectorDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                if (chatState != null) {
+                    Text("ChatGPT", color = VeniceCyan, fontWeight = FontWeight.Bold)
+                    when {
+                        chatState.openAiSession == null -> Text(
+                            "Connect ChatGPT in Privacy Vault to load your models.", color = VeniceTextSecondary)
+                        chatState.isLoadingChatGptModels -> Text("Loading your models…", color = VeniceTextSecondary)
+                    }
+                    chatState.chatGptModelError?.let { Text(it, color = VeniceTextSecondary) }
+                    if (chatState.openAiSession != null) {
+                        TextButton(onClick = onRefreshChatGptModels,
+                            enabled = !chatState.isLoadingChatGptModels && !chatState.isGeneratingChat) {
+                            Text("Refresh models")
+                        }
+                    }
+                    chatState.chatGptModels.forEach { model ->
+                        val selected = chatState.useChatGpt && model.id == chatState.selectedChatGptModelId
+                        Column(Modifier.fillMaxWidth().padding(vertical = 5.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(VeniceSurfaceElevated)
+                            .border(1.dp, if (selected) VeniceCyan else VeniceBorder, RoundedCornerShape(14.dp))
+                            .clickable(enabled = !chatState.isGeneratingChat && !chatState.isLoadingChatGptModels) {
+                                onSelectChatGptModel(model.id)
+                            }.padding(14.dp).testTag("chatgpt_model_${model.id}")) {
+                            Text((if (selected) "✓ " else "") + model.displayName,
+                                color = if (selected) VeniceCyan else VeniceTextPrimary,
+                                fontWeight = FontWeight.SemiBold)
+                            Text(model.id, color = VeniceTextMuted, fontSize = 11.sp)
+                            if (model.description.isNotBlank()) Text(model.description,
+                                color = VeniceTextSecondary, fontSize = 12.sp)
+                            if (selected && model.reasoningLevels.isNotEmpty()) {
+                                Text("Reasoning effort", color = VeniceTextPrimary, modifier = Modifier.padding(top = 8.dp))
+                                model.reasoningLevels.forEach { effort ->
+                                    TextButton(onClick = { onSelectReasoning(effort) }, enabled = !chatState.isGeneratingChat,
+                                        modifier = Modifier.testTag("chatgpt_reasoning_$effort")) {
+                                        Text((if (effort == chatState.chatGptReasoning) "✓ " else "") + effort)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(14.dp))
+                    Text("Gemini", color = VeniceAmber, fontWeight = FontWeight.Bold)
+                }
+
                 // Model Options: Balanced, Pro, Fast
                 val selectableModels = listOf(
                     VeniceModel.BALANCED,
@@ -108,7 +163,7 @@ fun ModelSelectorDialog(
                 )
 
                 selectableModels.forEach { model ->
-                    val isSelected = selectedModel == model
+                    val isSelected = chatState?.useChatGpt != true && selectedModel == model
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -120,7 +175,7 @@ fun ModelSelectorDialog(
                                 if (isSelected) VeniceAmber else VeniceBorder,
                                 RoundedCornerShape(14.dp)
                             )
-                            .clickable { onSelectModel(model) }
+                            .clickable(enabled = chatState?.isGeneratingChat != true) { onSelectModel(model) }
                             .padding(14.dp)
                             .testTag("model_option_${model.id}")
                     ) {
@@ -178,8 +233,8 @@ fun ModelSelectorDialog(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // High Thinking Mode Section
-                Box(
+                // Gemini-only reasoning control.
+                if (chatState?.useChatGpt != true) Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(14.dp))
@@ -225,6 +280,7 @@ fun ModelSelectorDialog(
 
                         Switch(
                             checked = isHighThinking,
+                            enabled = chatState?.isGeneratingChat != true,
                             onCheckedChange = { enabled ->
                                 onToggleHighThinking(enabled)
                             },

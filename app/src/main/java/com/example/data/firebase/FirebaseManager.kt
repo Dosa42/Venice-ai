@@ -116,6 +116,8 @@ object FirebaseManager {
                 "personaId" to session.personaId,
                 "selectedModel" to session.selectedModel,
                 "highThinkingEnabled" to session.highThinkingEnabled,
+                "useChatGpt" to session.useChatGpt,
+                "reasoningEffort" to session.reasoningEffort,
                 "updatedAt" to session.updatedAt,
                 "createdAt" to session.createdAt
             )
@@ -193,6 +195,8 @@ object FirebaseManager {
                     personaId = personaId,
                     selectedModel = model,
                     highThinkingEnabled = thinking,
+                    useChatGpt = doc.getBoolean("useChatGpt") ?: false,
+                    reasoningEffort = doc.getString("reasoningEffort"),
                     createdAt = createdAt,
                     updatedAt = updatedAt
                 )

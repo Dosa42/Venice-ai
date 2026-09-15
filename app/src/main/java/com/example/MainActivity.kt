@@ -99,11 +99,14 @@ fun VeniceApp(
         topBar = {
             VeniceTopBar(
                 currentModel = uiState.selectedModel,
-                isHighThinking = uiState.isHighThinkingEnabled,
+                isHighThinking = uiState.chatThinkingEnabled,
+                modelLabel = uiState.chatModelLabel,
+                reasoningLabel = if (uiState.useChatGpt) uiState.chatGptReasoning ?: "Reasoning" else null,
                 isZeroRetention = uiState.isZeroRetentionMode,
                 onOpenModelSelector = { showModelDialog = true },
                 onToggleHighThinking = {
-                    viewModel.toggleHighThinking(!uiState.isHighThinkingEnabled)
+                    if (uiState.useChatGpt) showModelDialog = true
+                    else viewModel.toggleHighThinking(!uiState.isHighThinkingEnabled)
                 },
                 onOpenPersonaSelector = { showPersonaSheet = true },
                 onBurnSession = { viewModel.burnSessionAndData() }
@@ -159,7 +162,11 @@ fun VeniceApp(
             onToggleHighThinking = { enabled ->
                 viewModel.toggleHighThinking(enabled)
             },
-            onDismiss = { showModelDialog = false }
+            onDismiss = { showModelDialog = false },
+            chatState = uiState,
+            onSelectChatGptModel = viewModel::selectChatGptModel,
+            onSelectReasoning = viewModel::selectChatGptReasoning,
+            onRefreshChatGptModels = viewModel::loadChatGptModels
         )
     }
 

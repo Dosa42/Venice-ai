@@ -148,9 +148,9 @@ fun ChatScreen(
     }
 
     // Auto-scroll when new messages arrive
-    LaunchedEffect(uiState.currentSession.messages.size, uiState.isGeneratingChat) {
+    LaunchedEffect(uiState.currentSession.messages.size, uiState.isGeneratingChat, uiState.streamingReply != null) {
         if (uiState.currentSession.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.currentSession.messages.size - 1)
+            listState.animateScrollToItem(uiState.currentSession.messages.size + if (uiState.isGeneratingChat || uiState.streamingReply != null) 1 else 0)
         }
     }
 
@@ -209,7 +209,7 @@ fun ChatScreen(
                     Spacer(modifier = Modifier.width(6.dp))
                 }
 
-                if (uiState.isHighThinkingEnabled) {
+                if (uiState.chatThinkingEnabled) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Psychology,
@@ -353,12 +353,16 @@ fun ChatScreen(
                         MessageBubble(message = message)
                     }
 
+                    uiState.streamingReply?.takeIf { it.text.isNotEmpty() }?.let { reply ->
+                        item(key = "chatgpt_stream") { MessageBubble(message = reply) }
+                    }
+
                     // Generating Progress Indicator
-                    if (uiState.isGeneratingChat) {
+                    if (uiState.isGeneratingChat && uiState.streamingReply?.text.isNullOrEmpty()) {
                         item {
                             ThinkingIndicator(
-                                isHighThinking = uiState.isHighThinkingEnabled,
-                                modelName = if (uiState.isHighThinkingEnabled) "Venice Pro" else uiState.selectedModel.displayName
+                                isHighThinking = uiState.chatThinkingEnabled,
+                                modelName = uiState.chatModelLabel
                             )
                         }
                     }
@@ -424,7 +428,7 @@ fun ChatScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Gemini will analyze text and image together",
+                        text = if (uiState.useChatGpt) "Selected ChatGPT model will analyze this image" else "Gemini will analyze text and image together",
                         color = VeniceTextMuted,
                         fontSize = 10.sp
                     )
@@ -553,7 +557,7 @@ fun ChatScreen(
                 onValueChange = { viewModel.setChatInput(it) },
                 placeholder = {
                     Text(
-                        text = if (uiState.isHighThinkingEnabled) "Ask Venice anything (High Thinking active)..." else "Ask Venice without censorship...",
+                        text = if (uiState.useChatGpt) "Message ChatGPT…" else if (uiState.isHighThinkingEnabled) "Ask Venice anything (High Thinking active)..." else "Ask Venice without censorship...",
                         color = VeniceTextMuted,
                         fontSize = 13.sp
                     )
@@ -568,11 +572,11 @@ fun ChatScreen(
                     }
                 ),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (uiState.isHighThinkingEnabled) VeniceThinkingPurple else VeniceAmber,
+                    focusedBorderColor = if (uiState.chatThinkingEnabled) VeniceThinkingPurple else VeniceAmber,
                     unfocusedBorderColor = VeniceBorder,
                     focusedTextColor = VeniceTextPrimary,
                     unfocusedTextColor = VeniceTextPrimary,
-                    cursorColor = if (uiState.isHighThinkingEnabled) VeniceThinkingPurple else VeniceAmber,
+                    cursorColor = if (uiState.chatThinkingEnabled) VeniceThinkingPurple else VeniceAmber,
                     focusedContainerColor = VeniceSurfaceElevated,
                     unfocusedContainerColor = VeniceSurfaceElevated
                 ),
@@ -601,7 +605,7 @@ fun ChatScreen(
                     .clip(CircleShape)
                     .background(
                         if (isSendEnabled)
-                            (if (uiState.isHighThinkingEnabled) VeniceThinkingPurple else VeniceAmber)
+                            (if (uiState.chatThinkingEnabled) VeniceThinkingPurple else VeniceAmber)
                         else VeniceSurfaceElevated
                     )
                     .testTag("send_message_button")

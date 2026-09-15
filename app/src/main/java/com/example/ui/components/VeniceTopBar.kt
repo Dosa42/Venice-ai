@@ -58,7 +58,9 @@ fun VeniceTopBar(
     onToggleHighThinking: () -> Unit,
     onOpenPersonaSelector: () -> Unit,
     onBurnSession: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    modelLabel: String? = null,
+    reasoningLabel: String? = null
 ) {
     Surface(
         color = VeniceSurface,
@@ -174,7 +176,7 @@ fun VeniceTopBar(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isHighThinking) "Thinking" else "Think",
+                                text = reasoningLabel ?: if (isHighThinking) "Thinking" else "Think",
                                 color = if (isHighThinking) VeniceThinkingPurple else VeniceTextMuted,
                                 fontSize = 12.sp,
                                 fontWeight = if (isHighThinking) FontWeight.Bold else FontWeight.Normal
@@ -222,7 +224,7 @@ fun VeniceTopBar(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = if (isHighThinking) "gemini-3.1-pro (High Thinking)" else currentModel.displayName,
+                            text = modelLabel ?: if (isHighThinking) "gemini-3.1-pro (High Thinking)" else currentModel.displayName,
                             color = if (isHighThinking) VeniceThinkingPurple else VeniceAmber,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
