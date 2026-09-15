@@ -56,20 +56,21 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ inputs.java_version || '21' }}
 
-      - name: Setup Android SDK Tools
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK Environment
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          # Accept SDK licenses automatically
+          yes | sdkmanager --licenses 2>/dev/null || true
 
-      - name: Cache Gradle Dependencies & Wrapper
-        uses: actions/cache@v4
+      - name: Setup Gradle & Dependency Cache
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
+          gradle-version: wrapper
+          cache-read-only: false
 
-      - name: Verify Gradle Permissions & Tools
+      - name: Verify Gradle Permissions
         run: |
           if [ -f "./gradlew" ]; then
             chmod +x ./gradlew
