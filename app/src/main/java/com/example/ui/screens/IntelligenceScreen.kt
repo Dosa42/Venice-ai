@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.ShortText
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -483,6 +484,11 @@ fun IntelligenceScreen(
         }
 
         // Output Result Card
+        uiState.intelligenceErrorMessage?.let { error ->
+            Text(text = error, color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.fillMaxWidth().padding(16.dp))
+        }
+
         if (uiState.intelligenceOutput.isNotBlank()) {
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -614,3 +620,4 @@ fun IntelligenceScreen(
         }
     }
 }
+

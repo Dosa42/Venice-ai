@@ -84,6 +84,7 @@ data class VeniceUiState(
     val intelligenceTool: String = "ENHANCE_PROMPT",
     val intelligenceInput: String = "",
     val intelligenceOutput: String = "",
+    val intelligenceErrorMessage: String? = null,
     val isRunningIntelligence: Boolean = false,
 
     // Privacy & Auth
@@ -421,7 +422,6 @@ class VeniceViewModel : ViewModel() {
             )
 
             val assistantMessage: ChatMessage
-            var requestError: String? = null
             if (snapshot.useChatGpt) {
                 val preview = ChatMessage(role = "model", text = "", modelUsed = chatGptModel!!.id,
                     thinkingEnabled = snapshot.chatThinkingEnabled)
@@ -442,10 +442,17 @@ class VeniceViewModel : ViewModel() {
                     systemInstruction = effectiveSystemPrompt,
                     enableHighThinking = snapshot.isHighThinkingEnabled
                 )
+                if (!result.isSuccess) {
+                    coroutineContext.ensureActive()
+                    if (generation == chatGeneration) {
+                        _uiState.value = _uiState.value.copy(isGeneratingChat = false,
+                            chatErrorMessage = result.errorMessage ?: "Gemini request failed.")
+                    }
+                    return@launch
+                }
                 assistantMessage = ChatMessage(role = "model", text = result.text,
                     thoughtProcess = result.thoughtProcess, modelUsed = snapshot.chatModelLabel,
                     thinkingEnabled = snapshot.isHighThinkingEnabled)
-                if (!result.isSuccess) requestError = result.errorMessage
             }
             coroutineContext.ensureActive()
             if (generation != chatGeneration) return@launch
@@ -461,7 +468,7 @@ class VeniceViewModel : ViewModel() {
                 currentSession = finalSession,
                 savedSessions = savedList,
                 isGeneratingChat = false,
-                chatErrorMessage = requestError,
+                chatErrorMessage = null,
                 streamingReply = null
             )
 
@@ -535,7 +542,7 @@ class VeniceViewModel : ViewModel() {
                 baseImageToEdit = _uiState.value.imageToEditBase64
             )
 
-            if (result.imageBase64 != null) {
+            if (result.isSuccess && result.imageBase64 != null) {
                 val newArt = GeneratedArt(
                     prompt = rawPrompt,
                     imageBase64 = result.imageBase64,
@@ -569,7 +576,7 @@ class VeniceViewModel : ViewModel() {
     // --- Venice Intelligence Tools ---
 
     fun setIntelligenceTool(tool: String) {
-        _uiState.value = _uiState.value.copy(intelligenceTool = tool, intelligenceOutput = "")
+        _uiState.value = _uiState.value.copy(intelligenceTool = tool, intelligenceOutput = "", intelligenceErrorMessage = null)
     }
 
     fun setIntelligenceInput(text: String) {
@@ -594,15 +601,16 @@ class VeniceViewModel : ViewModel() {
             }
         }.takeIf { it.isNotBlank() }
 
-        _uiState.value = _uiState.value.copy(isRunningIntelligence = true)
+        _uiState.value = _uiState.value.copy(isRunningIntelligence = true, intelligenceOutput = "", intelligenceErrorMessage = null)
         viewModelScope.launch {
-            val output = GeminiApi.runIntelligenceTask(
+            val result = GeminiApi.runIntelligenceTask(
                 taskType = _uiState.value.intelligenceTool,
                 input = input,
                 hardwareContext = hardwareContext
             )
             _uiState.value = _uiState.value.copy(
-                intelligenceOutput = output,
+                intelligenceOutput = if (result.isSuccess) result.text else "",
+                intelligenceErrorMessage = if (result.isSuccess) null else result.errorMessage ?: "Gemini request failed.",
                 isRunningIntelligence = false
             )
         }

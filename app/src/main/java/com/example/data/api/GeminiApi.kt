@@ -55,12 +55,7 @@ object GeminiApi {
         attachedImageBase64: String? = null
     ): GeminiResult = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext GeminiResult(
-                text = "Venice Privacy Shield: To activate live model inferencing, please configure your GEMINI_API_KEY in the AI Studio Secrets panel. (Simulating Venice zero-knowledge response for demo: 'Private zero-retention session initialized successfully. How can Venice assist you today?')",
-                isSuccess = true
-            )
-        }
+        configurationFailure(apiKey)?.let { return@withContext it }
 
         // When High Thinking is requested, use gemini-3.1-pro-preview
         val activeModel = if (enableHighThinking) "gemini-3.1-pro-preview" else modelName
@@ -156,13 +151,7 @@ object GeminiApi {
         val apiKey = getApiKey()
         val model = "gemini-3.1-flash-image-preview"
 
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext GeminiResult(
-                text = "Venice Image Studio: Please configure your GEMINI_API_KEY in the Secrets panel to generate real-time AI imagery. (Demo mode ready)",
-                isSuccess = false,
-                errorMessage = "API key not configured in AI Studio Secrets panel."
-            )
-        }
+        configurationFailure(apiKey)?.let { return@withContext it }
 
         try {
             val rootJson = JSONObject()
@@ -219,7 +208,7 @@ object GeminiApi {
                 )
             }
 
-            parseGenerateContentResponse(responseBody)
+            parseGenerateContentResponse(responseBody, expectImage = true)
         } catch (e: Exception) {
             Log.e(TAG, "Image generation error", e)
             GeminiResult(
@@ -237,11 +226,9 @@ object GeminiApi {
         taskType: String,
         input: String,
         hardwareContext: String? = null
-    ): String = withContext(Dispatchers.IO) {
+    ): GeminiResult = withContext(Dispatchers.IO) {
         val apiKey = getApiKey()
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext "Venice Intelligence output: Verified prompt and simulated privacy audit passed."
-        }
+        configurationFailure(apiKey)?.let { return@withContext it }
 
         val (model, baseSystemPrompt) = when (taskType) {
             "ENHANCE_PROMPT" -> Pair(
@@ -309,23 +296,34 @@ object GeminiApi {
 
             val response = client.newCall(request).execute()
             val responseBody = response.body?.string() ?: ""
-            val parsed = parseGenerateContentResponse(responseBody)
-            parsed.text
+            if (!response.isSuccessful) {
+                return@withContext failure("Gemini HTTP ${response.code}: $responseBody")
+            }
+            parseGenerateContentResponse(responseBody)
         } catch (e: Exception) {
-            "Analysis failed: ${e.message}"
+            failure("Analysis failed: ${e.message}")
         }
     }
 
-    private fun parseGenerateContentResponse(jsonString: String): GeminiResult {
+    private fun failure(message: String) = GeminiResult(text = "", isSuccess = false, errorMessage = message)
+
+    internal fun configurationFailure(apiKey: String): GeminiResult? =
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") failure("Gemini API key is not configured.") else null
+
+    internal fun parseGenerateContentResponse(jsonString: String, expectImage: Boolean = false): GeminiResult {
         try {
             val root = JSONObject(jsonString)
             val candidates = root.optJSONArray("candidates")
             if (candidates == null || candidates.length() == 0) {
                 val errorMsg = root.optJSONObject("error")?.optString("message") ?: "No candidates returned"
-                return GeminiResult(text = errorMsg, isSuccess = false, errorMessage = errorMsg)
+                return failure(errorMsg)
             }
 
             val firstCandidate = candidates.getJSONObject(0)
+            val finishReason = firstCandidate.optString("finishReason")
+            if (finishReason != "STOP") {
+                return failure("Gemini response did not complete normally: ${finishReason.ifBlank { "missing finish reason" }}")
+            }
             val content = firstCandidate.optJSONObject("content")
             val parts = content?.optJSONArray("parts")
 
@@ -364,8 +362,10 @@ object GeminiApi {
                 }
             }
 
+            if (expectImage && extractedImageBase64.isNullOrBlank()) return failure("Gemini returned no image.")
+            if (!expectImage && extractedText.isBlank()) return failure("Gemini returned no answer text.")
             return GeminiResult(
-                text = extractedText.ifBlank { if (extractedImageBase64 != null) "Generated with Venice Studio" else "Completed." },
+                text = extractedText,
                 thoughtProcess = extractedThought,
                 imageBase64 = extractedImageBase64,
                 isSuccess = true
@@ -395,3 +395,4 @@ object GeminiApi {
         }
     }
 }
+
