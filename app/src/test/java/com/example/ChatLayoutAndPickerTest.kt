@@ -82,9 +82,9 @@ class ChatLayoutAndPickerTest {
         val context = compose.onNodeWithTag("chat_context_row").getUnclippedBoundsInRoot()
         val header = compose.onNodeWithTag("compact_chat_header").getUnclippedBoundsInRoot()
         assertTrue("Composer must remain inside the viewport", field.bottom <= viewport.bottom)
-        assertTrue("Four lines must have room to display", field.height >= 96.dp)
-        assertTrue("Context must remain one short row", context.height < 36.dp)
-        assertTrue("Header must remain compact", header.height <= 56.dp)
+        assertTrue("Four lines must have room to display", field.bottom - field.top >= 96.dp)
+        assertTrue("Context must remain one short row", context.bottom - context.top < 36.dp)
+        assertTrue("Header must remain compact", header.bottom - header.top <= 56.dp)
         assertEquals(text, viewModel.uiState.value.chatInputText)
     }
 
