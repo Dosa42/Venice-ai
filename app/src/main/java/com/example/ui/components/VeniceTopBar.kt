@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material3.Icon
@@ -35,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.VeniceAmber
@@ -58,8 +60,53 @@ fun VeniceTopBar(
     onBurnSession: () -> Unit,
     modifier: Modifier = Modifier,
     modelLabel: String = "ChatGPT — select model",
-    reasoningLabel: String? = null
+    reasoningLabel: String? = null,
+    compact: Boolean = false
 ) {
+    if (compact) {
+        Surface(color = VeniceSurface, modifier = modifier.fillMaxWidth().statusBarsPadding()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                    .testTag("compact_chat_header"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("V", color = VeniceAmber, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp))
+                Row(
+                    modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onOpenModelSelector).padding(horizontal = 8.dp, vertical = 12.dp)
+                        .testTag("model_selector_chip"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(modelLabel, color = VeniceTextPrimary, fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false))
+                    Icon(Icons.Default.ExpandMore, "Switch Model", tint = VeniceTextMuted,
+                        modifier = Modifier.size(16.dp))
+                }
+                Box(
+                    modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                        .background(VeniceThinkingPurple.copy(alpha = 0.15f))
+                        .clickable(onClick = onToggleHighThinking)
+                        .padding(horizontal = 10.dp, vertical = 12.dp).testTag("high_thinking_toggle")
+                ) {
+                    Text(reasoningLabel ?: "Reasoning", color = VeniceThinkingPurple,
+                        fontSize = 11.sp, maxLines = 1)
+                }
+                IconButton(onClick = onOpenPersonaSelector,
+                    modifier = Modifier.size(40.dp).testTag("persona_selector_chip")) {
+                    Icon(Icons.Outlined.Person, "Select Persona", tint = VeniceCyan, modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = onBurnSession,
+                    modifier = Modifier.size(40.dp).testTag("burn_session_button")) {
+                    Icon(Icons.Default.DeleteSweep, "Burn Session and Clear Logs", tint = VeniceTextMuted,
+                        modifier = Modifier.size(20.dp))
+                }
+            }
+        }
+        return
+    }
     Surface(
         color = VeniceSurface,
         modifier = modifier

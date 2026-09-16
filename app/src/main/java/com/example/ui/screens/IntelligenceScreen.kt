@@ -4,10 +4,7 @@ import com.example.ui.components.TerminalExecutionCard
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +48,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import com.example.ui.components.rememberMiXplorerPicker
+import com.example.ui.components.readPickedTextFile
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,6 +95,7 @@ fun IntelligenceScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
     val tools = listOf(
@@ -172,34 +175,22 @@ fun IntelligenceScreen(
 
     val currentToolConfig = tools.find { it.id == uiState.intelligenceTool } ?: tools.first()
 
-    // SAF Document Loader for text logs, configs, and scripts
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            try {
-                var fileName = "imported_file.txt"
-                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst() && nameIndex != -1) {
-                        fileName = cursor.getString(nameIndex) ?: fileName
-                    }
+    val openDocumentPicker = rememberMiXplorerPicker(
+        onFile = { uri ->
+            coroutineScope.launch {
+                try {
+                    val file = readPickedTextFile(context, uri)
+                    viewModel.setIntelligenceInput(file.text)
+                    Toast.makeText(context, "Loaded ${file.name}", Toast.LENGTH_SHORT).show()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Could not read MiXplorer file: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val bytes = stream.readBytes()
-                    val textContent = if (bytes.size > 120_000) {
-                        String(bytes, 0, 120_000, Charsets.UTF_8) + "\n... [Truncated: File exceeded 120KB]"
-                    } else {
-                        String(bytes, Charsets.UTF_8)
-                    }
-                    viewModel.setIntelligenceInput(textContent)
-                    Toast.makeText(context, "Loaded $fileName into buffer", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Failed to read file", Toast.LENGTH_SHORT).show()
             }
-        }
-    }
+        },
+        onError = { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+    )
 
     Column(
         modifier = modifier
@@ -337,17 +328,17 @@ fun IntelligenceScreen(
                         fontSize = 14.sp
                     )
 
-                    // Import file via SAF button
+                    // Import a file from MiXplorer
                     Button(
-                        onClick = { filePickerLauncher.launch(arrayOf("*/*")) },
+                        onClick = openDocumentPicker,
                         colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(32.dp)
+                        modifier = Modifier.height(32.dp).testTag("intelligence_import_file")
                     ) {
                         Icon(
                             imageVector = Icons.Default.UploadFile,
-                            contentDescription = "Import File",
+                            contentDescription = "Attach file with MiXplorer",
                             tint = VeniceCyan,
                             modifier = Modifier.size(16.dp)
                         )
@@ -623,4 +614,3 @@ fun IntelligenceScreen(
         }
     }
 }
-

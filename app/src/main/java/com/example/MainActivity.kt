@@ -10,6 +10,10 @@ import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -20,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.ModelSelectorDialog
 import com.example.ui.components.PersonaSelectorSheet
@@ -86,10 +91,12 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun VeniceApp(
     viewModel: VeniceViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val chatKeyboardOpen = uiState.currentTab == VeniceNavTab.CHAT && WindowInsets.isImeVisible
 
     var showModelDialog by remember { mutableStateOf(false) }
     var showPersonaSheet by remember { mutableStateOf(false) }
@@ -101,6 +108,7 @@ fun VeniceApp(
                 modelLabel = uiState.chatModelLabel,
                 reasoningLabel = uiState.chatGptReasoning ?: "Reasoning",
                 isZeroRetention = uiState.isZeroRetentionMode,
+                compact = uiState.currentTab == VeniceNavTab.CHAT,
                 onOpenModelSelector = { showModelDialog = true },
                 onToggleHighThinking = { showModelDialog = true },
                 onOpenPersonaSelector = { showPersonaSheet = true },
@@ -108,18 +116,21 @@ fun VeniceApp(
             )
         },
         bottomBar = {
-            VeniceBottomNav(
-                activeTab = uiState.currentTab,
-                onTabSelected = { tab -> viewModel.setNavTab(tab) }
-            )
+            if (!chatKeyboardOpen) {
+                VeniceBottomNav(
+                    activeTab = uiState.currentTab,
+                    onTabSelected = { tab -> viewModel.setNavTab(tab) }
+                )
+            }
         },
         containerColor = VeniceBackground,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().testTag("venice_app")
     ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
                 .background(VeniceBackground)
         ) {
             Crossfade(targetState = uiState.currentTab, label = "tab_crossfade") { tab ->
