@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.data.model.VeniceModel
 import com.example.ui.components.ModelSelectorDialog
 import com.example.ui.components.PersonaSelectorSheet
 import com.example.ui.components.VeniceBottomNav
@@ -98,16 +97,12 @@ fun VeniceApp(
     Scaffold(
         topBar = {
             VeniceTopBar(
-                currentModel = uiState.selectedModel,
                 isHighThinking = uiState.chatThinkingEnabled,
                 modelLabel = uiState.chatModelLabel,
-                reasoningLabel = if (uiState.useChatGpt) uiState.chatGptReasoning ?: "Reasoning" else null,
+                reasoningLabel = uiState.chatGptReasoning ?: "Reasoning",
                 isZeroRetention = uiState.isZeroRetentionMode,
                 onOpenModelSelector = { showModelDialog = true },
-                onToggleHighThinking = {
-                    if (uiState.useChatGpt) showModelDialog = true
-                    else viewModel.toggleHighThinking(!uiState.isHighThinkingEnabled)
-                },
+                onToggleHighThinking = { showModelDialog = true },
                 onOpenPersonaSelector = { showPersonaSheet = true },
                 onBurnSession = { viewModel.burnSessionAndData() }
             )
@@ -153,15 +148,6 @@ fun VeniceApp(
     // Model Selector Dialog
     if (showModelDialog) {
         ModelSelectorDialog(
-            selectedModel = uiState.selectedModel,
-            isHighThinking = uiState.isHighThinkingEnabled,
-            onSelectModel = { model ->
-                viewModel.selectModel(model)
-                showModelDialog = false
-            },
-            onToggleHighThinking = { enabled ->
-                viewModel.toggleHighThinking(enabled)
-            },
             onDismiss = { showModelDialog = false },
             chatState = uiState,
             onSelectChatGptModel = viewModel::selectChatGptModel,

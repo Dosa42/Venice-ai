@@ -99,7 +99,7 @@ fun IntelligenceScreen(
             id = "SELF_CODEBASE_INSPECTION",
             title = "Self-Codebase & Patch Generator",
             subtitle = "Inspects internal source files, generates diffs & GitHub rebuild commands",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Code,
             accentColor = VeniceThinkingPurple
         ),
@@ -107,7 +107,7 @@ fun IntelligenceScreen(
             id = "DYNAMIC_RUNTIME_ADAPT",
             title = "Dynamic Adaptive Extractor",
             subtitle = "Extracts newly discovered interfaces, drivers & tools into runtime memory",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Psychology,
             accentColor = VeniceCyan
         ),
@@ -115,7 +115,7 @@ fun IntelligenceScreen(
             id = "TERMINAL_LOG_DIAGNOSTIC",
             title = "Terminal & Kernel Diagnostic",
             subtitle = "Diagnoses root causes in dmesg, error codes, and tool logs",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Terminal,
             accentColor = VeniceCyan
         ),
@@ -123,7 +123,7 @@ fun IntelligenceScreen(
             id = "SHELL_SCRIPT_AUDIT",
             title = "Shell & Automation Auditor",
             subtitle = "Hardens bash, zsh, and python automation scripts",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Code,
             accentColor = VeniceAmber
         ),
@@ -131,7 +131,7 @@ fun IntelligenceScreen(
             id = "NETWORK_CONFIG_ANALYZER",
             title = "Network & Routing Analyzer",
             subtitle = "Decodes ifconfig, routes, iptables, and nmap outputs",
-            modelBadge = "gemini-3.5-flash",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Hub,
             accentColor = VeniceThinkingPurple
         ),
@@ -139,7 +139,7 @@ fun IntelligenceScreen(
             id = "ENHANCE_PROMPT",
             title = "Venice Magic Prompt",
             subtitle = "Rewrites raw ideas into high-fidelity artistic prompts",
-            modelBadge = "gemini-3.1-flash-lite",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.AutoAwesome,
             accentColor = VeniceAmber
         ),
@@ -147,7 +147,7 @@ fun IntelligenceScreen(
             id = "SUMMARIZE",
             title = "Executive Summarizer",
             subtitle = "Extracts key insights and bullet points from long text",
-            modelBadge = "gemini-3.5-flash",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.ShortText,
             accentColor = VeniceCyan
         ),
@@ -155,7 +155,7 @@ fun IntelligenceScreen(
             id = "PRIVACY_AUDIT",
             title = "Privacy & Security Audit",
             subtitle = "Analyzes zero-knowledge threat models & tracking vectors",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Security,
             accentColor = VeniceThinkingPurple
         ),
@@ -163,7 +163,7 @@ fun IntelligenceScreen(
             id = "CODE_REFACTOR",
             title = "Code Security & Refactor",
             subtitle = "Hardens code, fixes bottlenecks, and optimizes architectures",
-            modelBadge = "gemini-3.1-pro-preview",
+            modelBadge = uiState.chatModelLabel,
             icon = Icons.Default.Code,
             accentColor = VeniceCyan
         )
@@ -221,7 +221,7 @@ fun IntelligenceScreen(
                     fontSize = 20.sp
                 )
                 Text(
-                    text = "Specialized AI tools powered by Gemini models",
+                    text = "Specialized AI tools using your selected ChatGPT model",
                     color = VeniceTextMuted,
                     fontSize = 12.sp
                 )

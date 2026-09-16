@@ -3,49 +3,6 @@ package com.example.data.model
 import com.squareup.moshi.JsonClass
 import java.util.UUID
 
-enum class VeniceModel(
-    val id: String,
-    val displayName: String,
-    val subtitle: String,
-    val badge: String,
-    val supportsHighThinking: Boolean
-) {
-    BALANCED(
-        id = "gemini-3.5-flash",
-        displayName = "Venice Balanced",
-        subtitle = "Fast multimodal reasoning & everyday queries",
-        badge = "Default",
-        supportsHighThinking = false
-    ),
-    PRO(
-        id = "gemini-3.1-pro-preview",
-        displayName = "Venice Pro",
-        subtitle = "Deep reasoning, coding, STEM & High Thinking",
-        badge = "Pro Reasoner",
-        supportsHighThinking = true
-    ),
-    FAST(
-        id = "gemini-3.1-flash-lite-preview",
-        displayName = "Venice Fast",
-        subtitle = "Ultra-low latency instant intelligence",
-        badge = "Fast",
-        supportsHighThinking = false
-    ),
-    IMAGE(
-        id = "gemini-3.1-flash-image-preview",
-        displayName = "Venice Studio",
-        subtitle = "High-fidelity multimodal image creator & editor",
-        badge = "Image Studio",
-        supportsHighThinking = false
-    );
-
-    companion object {
-        fun fromId(id: String): VeniceModel {
-            return entries.find { it.id == id } ?: BALANCED
-        }
-    }
-}
-
 @JsonClass(generateAdapter = true)
 data class Persona(
     val id: String,
@@ -118,14 +75,20 @@ data class ChatSession(
     val id: String = UUID.randomUUID().toString(),
     val title: String = "New Conversation",
     val personaId: String = "venice_unfiltered",
-    val selectedModel: String = VeniceModel.BALANCED.id,
+    val selectedModel: String = "",
     val highThinkingEnabled: Boolean = false,
-    val useChatGpt: Boolean = false,
+    val useChatGpt: Boolean = true,
     val reasoningEffort: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val messages: List<ChatMessage> = emptyList()
-)
+) {
+    // Preserve old conversations while continuing them with the user's ChatGPT selection.
+    fun forChatGpt(modelId: String?, effort: String?): ChatSession = if (useChatGpt) this else copy(
+        useChatGpt = true, selectedModel = modelId.orEmpty(), reasoningEffort = effort,
+        highThinkingEnabled = false
+    )
+}
 
 data class GeneratedArt(
     val id: String = UUID.randomUUID().toString(),

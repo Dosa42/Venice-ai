@@ -184,7 +184,7 @@ object FirebaseManager {
                 val id = doc.getString("id") ?: doc.id
                 val title = doc.getString("title") ?: "Conversation"
                 val personaId = doc.getString("personaId") ?: "venice_unfiltered"
-                val model = doc.getString("selectedModel") ?: "gemini-3.5-flash"
+                val model = doc.getString("selectedModel").orEmpty()
                 val thinking = doc.getBoolean("highThinkingEnabled") ?: false
                 val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
                 val updatedAt = doc.getLong("updatedAt") ?: System.currentTimeMillis()

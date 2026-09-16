@@ -38,7 +38,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.api.GeminiApi
+import com.example.data.api.ImageCodec
 import com.example.data.model.ChatMessage
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBorder
@@ -154,7 +154,7 @@ fun MessageBubble(
 
         // Attached image (Multimodal Vision / Studio generation)
         if (message.imageBase64 != null) {
-            val bitmap = GeminiApi.base64ToBitmap(message.imageBase64)
+            val bitmap = ImageCodec.base64ToBitmap(message.imageBase64)
             if (bitmap != null) {
                 Box(
                     modifier = Modifier

@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.R
-import com.example.data.api.GeminiApi
+import com.example.data.api.ImageCodec
 import com.example.data.model.GeneratedArt
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBackground
@@ -100,7 +100,7 @@ fun ImageStudioScreen(
                 context.contentResolver.openInputStream(uri)?.use { stream ->
                     val bitmap = BitmapFactory.decodeStream(stream)
                     if (bitmap != null) {
-                        val base64 = GeminiApi.bitmapToBase64(bitmap)
+                        val base64 = ImageCodec.bitmapToBase64(bitmap)
                         val uploadArt = GeneratedArt(
                             prompt = "User uploaded photo",
                             imageBase64 = base64,
@@ -164,7 +164,7 @@ fun ImageStudioScreen(
                                 .padding(horizontal = 6.dp, vertical = 2.dp)
                         ) {
                             Text(
-                                text = "gemini-3.1-flash-image-preview",
+                                text = "Image generation pending",
                                 color = VeniceAmber,
                                 fontSize = 9.sp,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
@@ -202,7 +202,7 @@ fun ImageStudioScreen(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val editBitmap = GeminiApi.base64ToBitmap(uiState.imageToEditBase64)
+                        val editBitmap = ImageCodec.base64ToBitmap(uiState.imageToEditBase64)
                         if (editBitmap != null) {
                             Image(
                                 bitmap = editBitmap.asImageBitmap(),
@@ -426,7 +426,7 @@ fun ImageStudioScreen(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = if (uiState.imageToEditBase64 != null) "Editing with Gemini..." else "Generating Masterpiece...",
+                            text = if (uiState.imageToEditBase64 != null) "Editing image..." else "Generating Masterpiece...",
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
@@ -440,7 +440,7 @@ fun ImageStudioScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (uiState.imageToEditBase64 != null) "Apply AI Edits" else "Generate Artwork",
+                            text = "Image generation pending",
                             color = Color.Black,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
@@ -509,7 +509,7 @@ fun ImageStudioScreen(
                         fontSize = 13.sp
                     )
                     Text(
-                        text = "Enter a prompt above to generate with gemini-3.1-flash-image-preview",
+                        text = "Image generation is not connected yet. Your saved gallery remains available.",
                         color = VeniceTextMuted,
                         fontSize = 11.sp
                     )
@@ -526,7 +526,7 @@ fun ImageStudioScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(uiState.galleryArt, key = { it.id }) { art ->
-                    val bitmap = GeminiApi.base64ToBitmap(art.imageBase64)
+                    val bitmap = ImageCodec.base64ToBitmap(art.imageBase64)
                     if (bitmap != null) {
                         Card(
                             shape = RoundedCornerShape(12.dp),
@@ -600,7 +600,7 @@ fun ImageStudioScreen(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    val detailBitmap = GeminiApi.base64ToBitmap(art.imageBase64)
+                    val detailBitmap = ImageCodec.base64ToBitmap(art.imageBase64)
                     if (detailBitmap != null) {
                         Image(
                             bitmap = detailBitmap.asImageBitmap(),

@@ -2,5 +2,5 @@
   "name": "Venice AI",
   "description": "Privacy-first Venice.ai clone featuring multimodal AI chat, high thinking mode, text-to-image studio, image editing, and private data architecture.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

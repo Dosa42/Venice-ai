@@ -37,7 +37,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.VeniceModel
 import com.example.ui.theme.VeniceAmber
 import com.example.ui.theme.VeniceBorder
 import com.example.ui.theme.VeniceBorderHighlight
@@ -51,7 +50,6 @@ import com.example.ui.theme.VeniceThinkingPurple
 
 @Composable
 fun VeniceTopBar(
-    currentModel: VeniceModel,
     isHighThinking: Boolean,
     isZeroRetention: Boolean,
     onOpenModelSelector: () -> Unit,
@@ -59,7 +57,7 @@ fun VeniceTopBar(
     onOpenPersonaSelector: () -> Unit,
     onBurnSession: () -> Unit,
     modifier: Modifier = Modifier,
-    modelLabel: String? = null,
+    modelLabel: String = "ChatGPT — select model",
     reasoningLabel: String? = null
 ) {
     Surface(
@@ -224,7 +222,7 @@ fun VeniceTopBar(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = modelLabel ?: if (isHighThinking) "gemini-3.1-pro (High Thinking)" else currentModel.displayName,
+                            text = modelLabel,
                             color = if (isHighThinking) VeniceThinkingPurple else VeniceAmber,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold

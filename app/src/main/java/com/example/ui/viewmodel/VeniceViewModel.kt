@@ -15,7 +15,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
-import com.example.data.api.GeminiApi
+import com.example.data.api.ImageCodec
+import com.example.data.api.IntelligencePrompts
 import com.example.data.auth.OpenAIOAuthManager
 import com.example.data.auth.OpenAIOAuthSession
 import com.example.data.firebase.FirebaseManager
@@ -29,7 +30,6 @@ import com.example.data.model.GeneratedArt
 import com.example.data.model.NetHunterHardwareProfile
 import com.example.data.model.Persona
 import com.example.data.model.PrivacyTelemetry
-import com.example.data.model.VeniceModel
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,10 +52,7 @@ data class VeniceUiState(
     val savedSessions: List<ChatSession> = emptyList(),
     val selectedPersona: Persona = Persona.DEFAULT_PERSONAS.first(),
     val availablePersonas: List<Persona> = Persona.DEFAULT_PERSONAS,
-    val selectedModel: VeniceModel = VeniceModel.BALANCED,
-    val isHighThinkingEnabled: Boolean = false,
     val isGeneratingChat: Boolean = false,
-    val useChatGpt: Boolean = false,
     val chatGptModels: List<ChatGptModel> = emptyList(),
     val selectedChatGptModelId: String? = null,
     val chatGptReasoning: String? = null,
@@ -121,10 +118,8 @@ data class VeniceUiState(
     val enabledNativeSkills: Set<String> = NativeSkillsEngine.SKILLS.map { it.id }.toSet(),
     val lastPromptHookResult: PromptHookResult? = null
 ) {
-    val chatModelLabel: String get() = if (useChatGpt) selectedChatGptModelId ?: "ChatGPT — select model"
-        else if (isHighThinkingEnabled) "Venice Pro (High Thinking)" else selectedModel.displayName
-    val chatThinkingEnabled: Boolean get() = if (useChatGpt) chatGptReasoning != null && chatGptReasoning != "none"
-        else isHighThinkingEnabled
+    val chatModelLabel: String get() = selectedChatGptModelId ?: "ChatGPT — select model"
+    val chatThinkingEnabled: Boolean get() = chatGptReasoning != null && chatGptReasoning != "none"
 }
 
 class VeniceViewModel : ViewModel() {
@@ -134,6 +129,7 @@ class VeniceViewModel : ViewModel() {
     private var appContext: Context? = null
     private var modelsJob: Job? = null
     private var chatJob: Job? = null
+    private var intelligenceJob: Job? = null
     private var chatGeneration = 0L
     private var accountGeneration = 0L
 
@@ -159,13 +155,12 @@ class VeniceViewModel : ViewModel() {
         val initialSession = ChatSession(
             title = "New Private Chat",
             personaId = Persona.DEFAULT_PERSONAS.first().id,
-            selectedModel = VeniceModel.BALANCED.id,
             highThinkingEnabled = false,
             messages = listOf(
                 ChatMessage(
                     role = "model",
                     text = "Welcome to Venice AI. Private, permissionless, and unrestricted intelligence. All sessions operate under client-first privacy architecture.",
-                    modelUsed = VeniceModel.BALANCED.displayName
+                    modelUsed = "Venice AI"
                 )
             )
         )
@@ -186,7 +181,7 @@ class VeniceViewModel : ViewModel() {
     }
 
     fun attachImage(bitmap: Bitmap) {
-        val base64 = GeminiApi.bitmapToBase64(bitmap)
+        val base64 = ImageCodec.bitmapToBase64(bitmap)
         _uiState.value = _uiState.value.copy(
             attachedImageBitmap = bitmap,
             attachedImageBase64 = base64
@@ -197,30 +192,6 @@ class VeniceViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(
             attachedImageBitmap = null,
             attachedImageBase64 = null
-        )
-    }
-
-    fun selectModel(model: VeniceModel) {
-        if (_uiState.value.isGeneratingChat) return
-        _uiState.value = _uiState.value.copy(
-            selectedModel = model,
-            useChatGpt = false,
-            isHighThinkingEnabled = if (model != VeniceModel.PRO) false else _uiState.value.isHighThinkingEnabled,
-            currentSession = _uiState.value.currentSession.copy(selectedModel = model.id, useChatGpt = false, reasoningEffort = null)
-        )
-    }
-
-    fun toggleHighThinking(enabled: Boolean) {
-        if (_uiState.value.useChatGpt || _uiState.value.isGeneratingChat) return
-        // High thinking requirement: When High Thinking is enabled, model MUST be gemini-3.1-pro-preview
-        val newModel = if (enabled) VeniceModel.PRO else _uiState.value.selectedModel
-        _uiState.value = _uiState.value.copy(
-            isHighThinkingEnabled = enabled,
-            selectedModel = newModel,
-            currentSession = _uiState.value.currentSession.copy(
-                highThinkingEnabled = enabled,
-                selectedModel = newModel.id
-            )
         )
     }
 
@@ -253,15 +224,13 @@ class VeniceViewModel : ViewModel() {
         val newSession = ChatSession(
             title = "New Private Chat",
             personaId = _uiState.value.selectedPersona.id,
-            selectedModel = if (_uiState.value.useChatGpt) _uiState.value.selectedChatGptModelId.orEmpty() else _uiState.value.selectedModel.id,
-            useChatGpt = _uiState.value.useChatGpt,
+            selectedModel = _uiState.value.selectedChatGptModelId.orEmpty(),
             reasoningEffort = _uiState.value.chatGptReasoning,
-            highThinkingEnabled = _uiState.value.isHighThinkingEnabled,
             messages = listOf(
                 ChatMessage(
                     role = "model",
                     text = "Venice session reset. Memory cleared. Operating in zero-retention mode.",
-                    modelUsed = _uiState.value.selectedModel.displayName
+                    modelUsed = _uiState.value.chatModelLabel
                 )
             )
         )
@@ -298,15 +267,12 @@ class VeniceViewModel : ViewModel() {
         cancelChat()
         val persona = _uiState.value.availablePersonas.find { it.id == session.personaId } 
             ?: Persona.DEFAULT_PERSONAS.first()
-        val model = VeniceModel.fromId(session.selectedModel)
+        val active = session.forChatGpt(_uiState.value.selectedChatGptModelId, _uiState.value.chatGptReasoning)
         _uiState.value = _uiState.value.copy(
-            currentSession = session,
-            useChatGpt = session.useChatGpt,
-            selectedChatGptModelId = if (session.useChatGpt) session.selectedModel else _uiState.value.selectedChatGptModelId,
-            chatGptReasoning = if (session.useChatGpt) session.reasoningEffort else _uiState.value.chatGptReasoning,
+            currentSession = active,
+            selectedChatGptModelId = active.selectedModel.takeIf { it.isNotBlank() },
+            chatGptReasoning = active.reasoningEffort,
             selectedPersona = persona,
-            selectedModel = model,
-            isHighThinkingEnabled = session.highThinkingEnabled,
             chatErrorMessage = null
         )
     }
@@ -315,15 +281,15 @@ class VeniceViewModel : ViewModel() {
         val snapshot = _uiState.value
         if (snapshot.isGeneratingChat) return
         val chatGptModel = snapshot.chatGptModels.find { it.id == snapshot.selectedChatGptModelId }
-        if (snapshot.useChatGpt && (snapshot.openAiSession == null || chatGptModel == null || snapshot.isLoadingChatGptModels)) {
+        if (snapshot.openAiSession == null || chatGptModel == null || snapshot.isLoadingChatGptModels) {
             _uiState.value = snapshot.copy(chatErrorMessage = "Connect ChatGPT and select an available model in the model menu.")
             return
         }
-        if (snapshot.useChatGpt && snapshot.chatGptReasoning != null && snapshot.chatGptReasoning !in chatGptModel!!.reasoningLevels) {
+        if (snapshot.chatGptReasoning != null && snapshot.chatGptReasoning !in chatGptModel.reasoningLevels) {
             _uiState.value = snapshot.copy(chatErrorMessage = "Select a supported reasoning level in the model menu.")
             return
         }
-        if (snapshot.useChatGpt && !chatGptModel!!.acceptsImages &&
+        if (!chatGptModel.acceptsImages &&
             (snapshot.attachedImageBase64 != null || snapshot.currentSession.messages.any { it.imageBase64 != null })) {
             _uiState.value = snapshot.copy(chatErrorMessage = "This model does not accept images. Select an image-capable model or start a new chat.")
             return
@@ -364,10 +330,10 @@ class VeniceViewModel : ViewModel() {
 
         val updatedSession = _uiState.value.currentSession.copy(
             title = updatedTitle,
-            useChatGpt = snapshot.useChatGpt,
-            selectedModel = if (snapshot.useChatGpt) chatGptModel!!.id else snapshot.selectedModel.id,
-            reasoningEffort = if (snapshot.useChatGpt) snapshot.chatGptReasoning else null,
-            highThinkingEnabled = !snapshot.useChatGpt && snapshot.isHighThinkingEnabled,
+            useChatGpt = true,
+            selectedModel = chatGptModel.id,
+            reasoningEffort = snapshot.chatGptReasoning,
+            highThinkingEnabled = false,
             messages = updatedMessages,
             updatedAt = System.currentTimeMillis()
         )
@@ -388,12 +354,6 @@ class VeniceViewModel : ViewModel() {
         val generation = ++chatGeneration
         chatJob = viewModelScope.launch {
           try {
-            val modelName = if (snapshot.isHighThinkingEnabled) {
-                "gemini-3.1-pro-preview"
-            } else {
-                snapshot.selectedModel.id
-            }
-
             val basePrompt = snapshot.selectedPersona.systemPrompt
             val hardwarePart = if (snapshot.injectHardwareProfile && snapshot.hardwareProfile.isEnabled) {
                 "\n\n${snapshot.hardwareProfile.toSystemPromptContext()}"
@@ -420,39 +380,19 @@ class VeniceViewModel : ViewModel() {
                 lastPromptHookResult = skillsHookResult
             )
 
-            val assistantMessage: ChatMessage
-            if (snapshot.useChatGpt) {
-                val preview = ChatMessage(role = "model", text = "", modelUsed = chatGptModel!!.id,
-                    thinkingEnabled = snapshot.chatThinkingEnabled)
-                val text = withChatGptSession { session ->
-                    ChatGptApi.stream(session, chatGptModel, snapshot.chatGptReasoning,
-                        updatedMessages, effectiveSystemPrompt) { partial ->
-                        viewModelScope.launch {
-                            if (generation == chatGeneration && _uiState.value.isGeneratingChat) {
-                                _uiState.value = _uiState.value.copy(streamingReply = preview.copy(text = partial))
-                            }
+            val preview = ChatMessage(role = "model", text = "", modelUsed = chatGptModel.id,
+                thinkingEnabled = snapshot.chatThinkingEnabled)
+            val text = withChatGptSession { session ->
+                ChatGptApi.stream(session, chatGptModel, snapshot.chatGptReasoning,
+                    updatedMessages, effectiveSystemPrompt) { partial ->
+                    viewModelScope.launch {
+                        if (generation == chatGeneration && _uiState.value.isGeneratingChat) {
+                            _uiState.value = _uiState.value.copy(streamingReply = preview.copy(text = partial))
                         }
                     }
                 }
-                assistantMessage = preview.copy(text = text)
-            } else {
-                val result = GeminiApi.generateChatResponse(
-                    modelName = modelName, history = updatedMessages,
-                    systemInstruction = effectiveSystemPrompt,
-                    enableHighThinking = snapshot.isHighThinkingEnabled
-                )
-                if (!result.isSuccess) {
-                    coroutineContext.ensureActive()
-                    if (generation == chatGeneration) {
-                        _uiState.value = _uiState.value.copy(isGeneratingChat = false,
-                            chatErrorMessage = result.errorMessage ?: "Gemini request failed.")
-                    }
-                    return@launch
-                }
-                assistantMessage = ChatMessage(role = "model", text = result.text,
-                    thoughtProcess = result.thoughtProcess, modelUsed = snapshot.chatModelLabel,
-                    thinkingEnabled = snapshot.isHighThinkingEnabled)
             }
+            val assistantMessage = preview.copy(text = text)
             coroutineContext.ensureActive()
             if (generation != chatGeneration) return@launch
 
@@ -519,62 +459,16 @@ class VeniceViewModel : ViewModel() {
     }
 
     fun generateOrEditImage() {
-        val rawPrompt = _uiState.value.imagePrompt.trim()
-        if (rawPrompt.isBlank()) return
-
-        val isEdit = _uiState.value.imageToEditBase64 != null
-        val fullPrompt = if (isEdit) {
-            rawPrompt
-        } else {
-            "$rawPrompt, ${_uiState.value.selectedStylePreset} style, cinematic lighting, 8k render, masterpiece"
-        }
-
         _uiState.value = _uiState.value.copy(
-            isGeneratingImage = true,
-            imageErrorMessage = null
+            isGeneratingImage = false,
+            imageErrorMessage = "Image generation and editing are not connected yet."
         )
-
-        viewModelScope.launch {
-            val result = GeminiApi.generateOrEditImage(
-                prompt = fullPrompt,
-                aspectRatio = _uiState.value.selectedAspectRatio,
-                baseImageToEdit = _uiState.value.imageToEditBase64
-            )
-
-            if (result.isSuccess && result.imageBase64 != null) {
-                val newArt = GeneratedArt(
-                    prompt = rawPrompt,
-                    imageBase64 = result.imageBase64,
-                    aspectRatio = _uiState.value.selectedAspectRatio,
-                    style = _uiState.value.selectedStylePreset,
-                    isEdit = isEdit,
-                    originalPrompt = if (isEdit) _uiState.value.selectedArtDetail?.prompt else null
-                )
-
-                val updatedGallery = listOf(newArt) + _uiState.value.galleryArt
-                _uiState.value = _uiState.value.copy(
-                    galleryArt = updatedGallery,
-                    selectedArtDetail = newArt,
-                    isGeneratingImage = false,
-                    imageToEditBase64 = null
-                )
-
-                // Sync to Firestore if authenticated
-                if (!_uiState.value.isZeroRetentionMode && _uiState.value.isCloudSyncEnabled && FirebaseManager.isUserSignedIn) {
-                    FirebaseManager.saveArtToFirestore(newArt)
-                }
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    isGeneratingImage = false,
-                    imageErrorMessage = result.errorMessage ?: result.text
-                )
-            }
-        }
     }
 
     // --- Venice Intelligence Tools ---
 
     fun setIntelligenceTool(tool: String) {
+        cancelIntelligence()
         _uiState.value = _uiState.value.copy(intelligenceTool = tool, intelligenceOutput = "", intelligenceErrorMessage = null)
     }
 
@@ -583,36 +477,54 @@ class VeniceViewModel : ViewModel() {
     }
 
     fun runIntelligenceTask() {
-        val input = _uiState.value.intelligenceInput.trim()
+        val snapshot = _uiState.value
+        if (snapshot.isRunningIntelligence) return
+        val input = snapshot.intelligenceInput.trim()
         if (input.isBlank()) return
+        val model = snapshot.chatGptModels.find { it.id == snapshot.selectedChatGptModelId }
+        if (snapshot.openAiSession == null || model == null || snapshot.isLoadingChatGptModels) {
+            _uiState.value = snapshot.copy(intelligenceErrorMessage = "Connect ChatGPT and select an available model in the model menu.")
+            return
+        }
 
         val hardwareContext = buildString {
-            if (_uiState.value.injectHardwareProfile && _uiState.value.hardwareProfile.isEnabled) {
-                append(_uiState.value.hardwareProfile.toSystemPromptContext())
+            if (snapshot.injectHardwareProfile && snapshot.hardwareProfile.isEnabled) {
+                append(snapshot.hardwareProfile.toSystemPromptContext())
             }
-            if (_uiState.value.dynamicAdaptivePromptContext.isNotBlank()) {
+            if (snapshot.dynamicAdaptivePromptContext.isNotBlank()) {
                 if (isNotEmpty()) append("\n\n")
-                append(_uiState.value.dynamicAdaptivePromptContext)
+                append(snapshot.dynamicAdaptivePromptContext)
             }
-            if (_uiState.value.isSelfAwarenessEnabled || _uiState.value.intelligenceTool == "SELF_CODEBASE_INSPECTION") {
+            if (snapshot.isSelfAwarenessEnabled || snapshot.intelligenceTool == "SELF_CODEBASE_INSPECTION") {
                 if (isNotEmpty()) append("\n\n")
-                append(CodebaseManifestEngine.buildSelfIntrospectionContext(_uiState.value.selectedIntrospectionFile))
+                append(CodebaseManifestEngine.buildSelfIntrospectionContext(snapshot.selectedIntrospectionFile))
             }
         }.takeIf { it.isNotBlank() }
 
-        _uiState.value = _uiState.value.copy(isRunningIntelligence = true, intelligenceOutput = "", intelligenceErrorMessage = null)
-        viewModelScope.launch {
-            val result = GeminiApi.runIntelligenceTask(
-                taskType = _uiState.value.intelligenceTool,
-                input = input,
-                hardwareContext = hardwareContext
-            )
-            _uiState.value = _uiState.value.copy(
-                intelligenceOutput = if (result.isSuccess) result.text else "",
-                intelligenceErrorMessage = if (result.isSuccess) null else result.errorMessage ?: "Gemini request failed.",
-                isRunningIntelligence = false
-            )
+        val instructions = listOfNotNull(
+            IntelligencePrompts.forTask(snapshot.intelligenceTool), hardwareContext
+        ).joinToString("\n\n")
+        _uiState.value = snapshot.copy(isRunningIntelligence = true, intelligenceOutput = "", intelligenceErrorMessage = null)
+        intelligenceJob = viewModelScope.launch {
+            try {
+                val output = withChatGptSession { session ->
+                    ChatGptApi.stream(session, model, snapshot.chatGptReasoning,
+                        listOf(ChatMessage(role = "user", text = input)), instructions) {}
+                }
+                coroutineContext.ensureActive()
+                _uiState.value = _uiState.value.copy(intelligenceOutput = output, isRunningIntelligence = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isRunningIntelligence = false,
+                    intelligenceErrorMessage = e.message ?: "ChatGPT analysis failed. Please retry.")
+            }
         }
+    }
+
+    private fun cancelIntelligence() {
+        intelligenceJob?.cancel()
+        _uiState.value = _uiState.value.copy(isRunningIntelligence = false)
     }
 
     fun applyEnhancedPromptToChat() {
@@ -725,7 +637,7 @@ class VeniceViewModel : ViewModel() {
                     ChatMessage(
                         role = "model",
                         text = "Venice Panic Burn Complete. All chat history, local cache, and cloud vault records have been purged.",
-                        modelUsed = VeniceModel.BALANCED.displayName
+                        modelUsed = "Venice AI"
                     )
                 )
             )
@@ -806,9 +718,10 @@ class VeniceViewModel : ViewModel() {
     fun sendSharedPayloadToDiagnostic() {
         val payload = _uiState.value.sharedTerminalPayload ?: _uiState.value.chatInputText
         if (payload.isNotBlank()) {
+            cancelIntelligence()
             _uiState.value = _uiState.value.copy(
                 currentTab = VeniceNavTab.INTELLIGENCE,
-                intelligenceTool = "DIAGNOSE_TERMINAL",
+                intelligenceTool = "TERMINAL_LOG_DIAGNOSTIC",
                 intelligenceInput = payload,
                 sharedTerminalPayload = null,
                 statusNotice = "Transferred to Terminal Diagnostic Tool"
@@ -825,7 +738,6 @@ class VeniceViewModel : ViewModel() {
         val changed = session?.accountId != _uiState.value.openAiSession?.accountId
         _uiState.value = _uiState.value.copy(openAiSession = session)
         if (session != null && (firstLoad || changed)) {
-            _uiState.value = _uiState.value.copy(useChatGpt = true)
             loadChatGptModels()
         }
     }
@@ -871,9 +783,8 @@ class VeniceViewModel : ViewModel() {
                     selectedChatGptModelId = selected?.id ?: state.selectedChatGptModelId,
                     chatGptReasoning = effort,
                     chatGptModelError = if (selected == null) "Previously selected model is unavailable. Choose a model below." else null,
-                    currentSession = if (state.useChatGpt) state.currentSession.copy(useChatGpt = true,
-                        selectedModel = selected?.id ?: state.selectedChatGptModelId.orEmpty(), reasoningEffort = effort)
-                        else state.currentSession)
+                    currentSession = state.currentSession.copy(useChatGpt = true,
+                        selectedModel = selected?.id ?: state.selectedChatGptModelId.orEmpty(), reasoningEffort = effort))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -888,14 +799,14 @@ class VeniceViewModel : ViewModel() {
         if (state.isGeneratingChat) return
         val model = state.chatGptModels.find { it.id == id } ?: return
         val effort = if (id == state.selectedChatGptModelId) state.chatGptReasoning else model.defaultReasoning
-        _uiState.value = state.copy(useChatGpt = true, selectedChatGptModelId = id,
+        _uiState.value = state.copy(selectedChatGptModelId = id,
             chatGptReasoning = effort, chatErrorMessage = null,
             currentSession = state.currentSession.copy(useChatGpt = true, selectedModel = id, reasoningEffort = effort))
     }
 
     fun selectChatGptReasoning(effort: String) {
         val state = _uiState.value
-        if (state.isGeneratingChat || !state.useChatGpt) return
+        if (state.isGeneratingChat) return
         val model = state.chatGptModels.find { it.id == state.selectedChatGptModelId } ?: return
         if (effort !in model.reasoningLevels) return
         _uiState.value = state.copy(chatGptReasoning = effort,
@@ -919,10 +830,10 @@ class VeniceViewModel : ViewModel() {
 
             result.onSuccess { session ->
                 ++accountGeneration
+                cancelIntelligence()
                 cancelChat()
                 _uiState.value = _uiState.value.copy(
                     openAiSession = session,
-                    useChatGpt = true,
                     selectedChatGptModelId = null,
                     chatGptReasoning = null,
                     chatGptModels = emptyList(),
@@ -966,7 +877,8 @@ class VeniceViewModel : ViewModel() {
     fun disconnectOpenAi(context: Context) {
         ++accountGeneration
         modelsJob?.cancel()
-        if (_uiState.value.useChatGpt) cancelChat()
+        cancelChat()
+        cancelIntelligence()
         OpenAIOAuthManager.clearSession(context)
         _uiState.value = _uiState.value.copy(
             openAiSession = null,

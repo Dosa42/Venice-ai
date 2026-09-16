@@ -428,7 +428,7 @@ fun ChatScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = if (uiState.useChatGpt) "Selected ChatGPT model will analyze this image" else "Gemini will analyze text and image together",
+                        text = "Selected ChatGPT model will analyze this image",
                         color = VeniceTextMuted,
                         fontSize = 10.sp
                     )
@@ -557,7 +557,7 @@ fun ChatScreen(
                 onValueChange = { viewModel.setChatInput(it) },
                 placeholder = {
                     Text(
-                        text = if (uiState.useChatGpt) "Message ChatGPT…" else if (uiState.isHighThinkingEnabled) "Ask Venice anything (High Thinking active)..." else "Ask Venice without censorship...",
+                        text = "Message ChatGPT…",
                         color = VeniceTextMuted,
                         fontSize = 13.sp
                     )
