@@ -50,7 +50,7 @@ fun TerminalExecutionCard(commands: List<TerminalCommand>, onStop: (String) -> U
                 if (command.status == "starting" || command.status == "running") {
                     TextButton(onClick = { onStop(command.id) }) { Text("Stop") }
                 }
-                TextButton(onClick = onStopWork) { Text("Stop turn") }
+                TextButton(onClick = onStopWork) { Text("Stop all") }
             }
         }
     }

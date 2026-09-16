@@ -75,7 +75,7 @@ class ChatGptToolLoopTest {
         assertEquals("function_call_output", next.getJSONArray("input").getJSONObject(2).getString("type"))
     }
 
-    @Test fun commandFailureIsReturnedToModelWithoutPretendingSuccess() = runBlocking {
+    @Test fun commandFailureIsReturnedToModelWithoutPretendingSuccess() = runBlocking<Unit> {
         var requests = 0
         ChatGptToolLoop.run(body(), send = { request, _ ->
             if (++requests == 1) ChatGptTurn("", JSONArray().put(call())) else {
