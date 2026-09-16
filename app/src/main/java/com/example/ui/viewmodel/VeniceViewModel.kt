@@ -105,7 +105,6 @@ data class VeniceUiState(
     val openAiSession: OpenAIOAuthSession? = null,
     val isOpenAiAuthenticating: Boolean = false,
     val openAiAuthStatus: String? = null,
-    val openAiCustomClientId: String = OpenAIOAuthManager.DEFAULT_CLIENT_ID,
 
     // Dynamic Adaptive Framework (DAF)
     val adaptiveFacts: List<AdaptiveFact> = emptyList(),
@@ -824,8 +823,7 @@ class VeniceViewModel : ViewModel() {
         appContext = context.applicationContext
         val session = OpenAIOAuthManager.loadSession(context)
         val changed = session?.accountId != _uiState.value.openAiSession?.accountId
-        _uiState.value = _uiState.value.copy(openAiSession = session,
-            openAiCustomClientId = OpenAIOAuthManager.getClientId(context))
+        _uiState.value = _uiState.value.copy(openAiSession = session)
         if (session != null && (firstLoad || changed)) {
             _uiState.value = _uiState.value.copy(useChatGpt = true)
             loadChatGptModels()
@@ -979,13 +977,6 @@ class VeniceViewModel : ViewModel() {
             chatGptModelError = null,
             openAiAuthStatus = null,
             statusNotice = "ChatGPT OAuth Session Disconnected"
-        )
-    }
-
-    fun updateOpenAiClientId(context: Context, newClientId: String) {
-        OpenAIOAuthManager.setClientId(context, newClientId)
-        _uiState.value = _uiState.value.copy(
-            openAiCustomClientId = newClientId.ifBlank { OpenAIOAuthManager.DEFAULT_CLIENT_ID }
         )
     }
 

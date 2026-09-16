@@ -300,11 +300,9 @@ fun PrivacyAccountScreen(
             session = uiState.openAiSession,
             isAuthenticating = uiState.isOpenAiAuthenticating,
             authStatus = uiState.openAiAuthStatus,
-            clientId = uiState.openAiCustomClientId,
             onStartLogin = { viewModel.startOpenAiPkceLogin(context) },
             onRefreshToken = { viewModel.refreshOpenAiSession(context) },
-            onDisconnect = { viewModel.disconnectOpenAi(context) },
-            onUpdateClientId = { viewModel.updateOpenAiClientId(context, it) }
+            onDisconnect = { viewModel.disconnectOpenAi(context) }
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -857,14 +855,11 @@ fun OpenAIOAuthCard(
     session: OpenAIOAuthSession?,
     isAuthenticating: Boolean,
     authStatus: String?,
-    clientId: String,
     onStartLogin: () -> Unit,
     onRefreshToken: () -> Unit,
-    onDisconnect: () -> Unit,
-    onUpdateClientId: (String) -> Unit
+    onDisconnect: () -> Unit
 ) {
     var showConfig by remember { mutableStateOf(false) }
-    var editClientId by remember(clientId) { mutableStateOf(clientId) }
 
     val isConnected = session != null
     val isExpired = session?.isExpired == true
@@ -1096,7 +1091,6 @@ fun OpenAIOAuthCard(
                 // Login action button
                 Button(
                     onClick = onStartLogin,
-                    enabled = !isAuthenticating,
                     colors = ButtonDefaults.buttonColors(containerColor = VeniceCyan),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier
@@ -1144,40 +1138,16 @@ fun OpenAIOAuthCard(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable { showConfig = !showConfig }
                 )
-
-                if (showConfig && clientId != OpenAIOAuthManager.DEFAULT_CLIENT_ID) {
-                    Text(
-                        text = "Reset Default Client ID",
-                        color = VeniceAmber,
-                        fontSize = 11.sp,
-                        modifier = Modifier.clickable {
-                            editClientId = OpenAIOAuthManager.DEFAULT_CLIENT_ID
-                            onUpdateClientId(OpenAIOAuthManager.DEFAULT_CLIENT_ID)
-                        }
-                    )
-                }
             }
 
             if (showConfig) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = editClientId,
-                        onValueChange = {
-                            editClientId = it
-                            onUpdateClientId(it)
-                        },
-                        label = { Text("OpenAI OAuth Client ID", color = VeniceTextMuted, fontSize = 11.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = VeniceSurfaceElevated,
-                            unfocusedContainerColor = VeniceSurfaceElevated,
-                            focusedTextColor = VeniceTextPrimary,
-                            unfocusedTextColor = VeniceTextPrimary,
-                            focusedIndicatorColor = VeniceCyan,
-                            unfocusedIndicatorColor = VeniceBorder
-                        ),
-                        singleLine = true
+                    Text(
+                        text = "OpenAI OAuth Client ID: ${OpenAIOAuthManager.DEFAULT_CLIENT_ID}",
+                        color = VeniceTextMuted,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
                     )
 
                     Box(

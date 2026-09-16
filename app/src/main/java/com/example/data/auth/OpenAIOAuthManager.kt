@@ -66,23 +66,12 @@ object OpenAIOAuthManager {
 
     private const val PREFS_NAME = "venice_openai_oauth"
     private const val KEY_SESSION = "stored_session"
-    private const val KEY_CUSTOM_CLIENT_ID = "custom_client_id"
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
-
-    fun getClientId(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(KEY_CUSTOM_CLIENT_ID, null)?.takeIf { it.isNotBlank() } ?: DEFAULT_CLIENT_ID
-    }
-
-    fun setClientId(context: Context, clientId: String?) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_CUSTOM_CLIENT_ID, clientId?.trim()).apply()
-    }
 
     private fun generateCodeVerifier(): String {
         val bytes = ByteArray(32)
@@ -101,13 +90,12 @@ object OpenAIOAuthManager {
     ): Result<OpenAIOAuthSession> = withContext(Dispatchers.IO) {
         var serverSocket: ServerSocket? = null
         try {
-            val clientId = getClientId(context)
             val codeVerifier = generateCodeVerifier()
             val state = UUID.randomUUID().toString()
 
             val authUrl = Uri.parse(AUTH_ENDPOINT).buildUpon()
                 .appendQueryParameter("response_type", "code")
-                .appendQueryParameter("client_id", clientId)
+                .appendQueryParameter("client_id", DEFAULT_CLIENT_ID)
                 .appendQueryParameter("redirect_uri", REDIRECT_URI)
                 .appendQueryParameter(
                     "scope",
@@ -199,7 +187,7 @@ object OpenAIOAuthManager {
                 code.isNullOrBlank() -> Result.failure(Exception("No authorization code received."))
                 else -> {
                     onStatusUpdate?.invoke("Exchanging authorization code for tokens...")
-                    val tokenResult = exchangeCodeForTokens(clientId, code, codeVerifier)
+                    val tokenResult = exchangeCodeForTokens(code, codeVerifier)
                     tokenResult.onSuccess { session ->
                         saveSession(context, session)
                         onStatusUpdate?.invoke("OpenAI OAuth session active.")
@@ -269,7 +257,7 @@ object OpenAIOAuthManager {
                 }
                 val body = FormBody.Builder()
                     .add("grant_type", "refresh_token")
-                    .add("client_id", getClientId(context))
+                    .add("client_id", DEFAULT_CLIENT_ID)
                     .add("refresh_token", session.refreshToken).build()
                 val updated = exchangeTokenRequest(body, previous = session).getOrThrow()
                 synchronized(sessionLock) {
@@ -289,13 +277,12 @@ object OpenAIOAuthManager {
     }
 
     private fun exchangeCodeForTokens(
-        clientId: String,
         code: String,
         verifier: String
     ): Result<OpenAIOAuthSession> {
         val body = FormBody.Builder()
             .add("grant_type", "authorization_code")
-            .add("client_id", clientId)
+            .add("client_id", DEFAULT_CLIENT_ID)
             .add("code", code)
             .add("redirect_uri", REDIRECT_URI)
             .add("code_verifier", verifier)
