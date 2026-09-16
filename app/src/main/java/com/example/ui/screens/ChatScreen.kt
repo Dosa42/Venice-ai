@@ -460,7 +460,8 @@ fun ChatScreen(
                 .fillMaxWidth()
                 .background(VeniceSurface)
                 .border(width = 0.5.dp, color = VeniceBorder)
-                .padding(horizontal = 10.dp, vertical = 8.dp).testTag("chat_composer"),
+                .testTag("chat_composer")
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom
         ) {
             // Attach Photo Button
