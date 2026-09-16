@@ -9,6 +9,14 @@ import com.example.data.adaptive.AdaptiveCategory
 import com.example.data.adaptive.AdaptiveFact
 import com.example.data.adaptive.DynamicAdaptiveEngine
 import com.example.data.api.ChatGptApi
+import com.example.data.api.ChatGptToolLoop
+import com.example.data.api.ChatGptTurn
+import com.example.data.local.NetHunterTerminal
+import com.example.data.local.TerminalCommand
+import com.example.data.local.TerminalTools
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 import com.example.data.api.ChatGptModel
 import com.example.data.api.ChatGptHttpException
 import kotlinx.coroutines.CancellationException
@@ -58,6 +66,7 @@ data class VeniceUiState(
     val chatGptReasoning: String? = null,
     val isLoadingChatGptModels: Boolean = false,
     val chatGptModelError: String? = null,
+    val terminalCommands: List<TerminalCommand> = emptyList(),
     val streamingReply: ChatMessage? = null,
     val chatInputText: String = "",
     val attachedImageBase64: String? = null,
@@ -126,6 +135,7 @@ class VeniceViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(VeniceUiState())
     val uiState: StateFlow<VeniceUiState> = _uiState.asStateFlow()
 
+    private var terminal: NetHunterTerminal? = null
     private var appContext: Context? = null
     private var modelsJob: Job? = null
     private var chatJob: Job? = null
@@ -351,6 +361,7 @@ class VeniceViewModel : ViewModel() {
             streamingReply = null
         )
 
+        var recordedItems: String? = null
         val generation = ++chatGeneration
         chatJob = viewModelScope.launch {
           try {
@@ -382,17 +393,16 @@ class VeniceViewModel : ViewModel() {
 
             val preview = ChatMessage(role = "model", text = "", modelUsed = chatGptModel.id,
                 thinkingEnabled = snapshot.chatThinkingEnabled)
-            val text = withChatGptSession { session ->
-                ChatGptApi.stream(session, chatGptModel, snapshot.chatGptReasoning,
-                    updatedMessages, effectiveSystemPrompt) { partial ->
-                    viewModelScope.launch {
-                        if (generation == chatGeneration && _uiState.value.isGeneratingChat) {
-                            _uiState.value = _uiState.value.copy(streamingReply = preview.copy(text = partial))
-                        }
+            val turn = runWithTerminal(chatGptModel, snapshot.chatGptReasoning,
+                updatedMessages, effectiveSystemPrompt, snapshot.hardwareProfile.chrootPath,
+                onItems = { recordedItems = it }) { partial ->
+                viewModelScope.launch {
+                    if (generation == chatGeneration && _uiState.value.isGeneratingChat) {
+                        _uiState.value = _uiState.value.copy(streamingReply = preview.copy(text = partial))
                     }
                 }
             }
-            val assistantMessage = preview.copy(text = text)
+            val assistantMessage = preview.copy(text = turn.text, responseItemsJson = turn.output.toString())
             coroutineContext.ensureActive()
             if (generation != chatGeneration) return@launch
 
@@ -418,8 +428,10 @@ class VeniceViewModel : ViewModel() {
                 FirebaseManager.syncMessageToFirestore(finalSession.id, assistantMessage)
             }
           } catch (e: CancellationException) {
+              rememberTerminalResults(updatedSession, recordedItems, "Turn cancelled.")
               throw e
           } catch (e: Exception) {
+              rememberTerminalResults(updatedSession, recordedItems, e.message ?: "Chat request failed.")
               if (generation == chatGeneration) {
                   _uiState.value = _uiState.value.copy(isGeneratingChat = false,
                       chatErrorMessage = e.message ?: "Chat request failed. Please retry.")
@@ -507,12 +519,11 @@ class VeniceViewModel : ViewModel() {
         _uiState.value = snapshot.copy(isRunningIntelligence = true, intelligenceOutput = "", intelligenceErrorMessage = null)
         intelligenceJob = viewModelScope.launch {
             try {
-                val output = withChatGptSession { session ->
-                    ChatGptApi.stream(session, model, snapshot.chatGptReasoning,
-                        listOf(ChatMessage(role = "user", text = input)), instructions) {}
-                }
+                val turn = runWithTerminal(model, snapshot.chatGptReasoning,
+                    listOf(ChatMessage(role = "user", text = input)), instructions,
+                    snapshot.hardwareProfile.chrootPath, onItems = {}) {}
                 coroutineContext.ensureActive()
-                _uiState.value = _uiState.value.copy(intelligenceOutput = output, isRunningIntelligence = false)
+                _uiState.value = _uiState.value.copy(intelligenceOutput = turn.text, isRunningIntelligence = false)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -734,6 +745,13 @@ class VeniceViewModel : ViewModel() {
     fun loadOpenAiSession(context: Context) {
         val firstLoad = appContext == null
         appContext = context.applicationContext
+        if (terminal == null) {
+            val executor = NetHunterTerminal(viewModelScope, File(context.filesDir, "terminal"))
+            terminal = executor
+            viewModelScope.launch { executor.commands.collect { commands ->
+                _uiState.update { it.copy(terminalCommands = commands) }
+            } }
+        }
         val session = OpenAIOAuthManager.loadSession(context)
         val changed = session?.accountId != _uiState.value.openAiSession?.accountId
         _uiState.value = _uiState.value.copy(openAiSession = session)
@@ -746,6 +764,42 @@ class VeniceViewModel : ViewModel() {
         ++chatGeneration
         chatJob?.cancel()
         _uiState.value = _uiState.value.copy(isGeneratingChat = false, streamingReply = null)
+    }
+
+    fun stopTerminalCommand(id: String) { terminal?.stop(id) }
+
+    fun stopActiveWork() {
+        terminal?.stopAll()
+        cancelChat()
+        cancelIntelligence()
+    }
+
+    private suspend fun runWithTerminal(
+        model: ChatGptModel, effort: String?, history: List<ChatMessage>, instructions: String,
+        chrootPath: String, onItems: (String) -> Unit, onText: (String) -> Unit
+    ): ChatGptTurn {
+        val executor = terminal ?: error("Terminal is not initialized. Reopen the app.")
+        val tools = TerminalTools(executor, chrootPath)
+        val body = ChatGptApi.responseBody(model, effort, history,
+            instructions + "\n\n" + TerminalTools.instructions, TerminalTools.definitions())
+        return ChatGptToolLoop.run(body,
+            send = { request, update -> withChatGptSession { session -> ChatGptApi.streamTurn(session, request, update) } },
+            execute = tools::execute, onItems = onItems, onText = onText)
+    }
+
+    private fun rememberTerminalResults(session: ChatSession, items: String?, error: String) {
+        if (items == null) return
+        val transcript = JSONArray(items)
+        transcript.put(JSONObject().put("type", "message").put("role", "assistant")
+            .put("content", JSONArray().put(JSONObject().put("type", "output_text").put("text", error))))
+        val message = ChatMessage(role = "model", text = error, responseItemsJson = transcript.toString())
+        _uiState.update { state ->
+            state.copy(
+                currentSession = if (state.currentSession.id == session.id)
+                    state.currentSession.copy(messages = state.currentSession.messages + message) else state.currentSession,
+                savedSessions = state.savedSessions.map { if (it.id == session.id) session.copy(messages = session.messages + message) else it }
+            )
+        }
     }
 
     private suspend fun <T> withChatGptSession(action: suspend (OpenAIOAuthSession) -> T): T {
@@ -875,6 +929,7 @@ class VeniceViewModel : ViewModel() {
     }
 
     fun disconnectOpenAi(context: Context) {
+        terminal?.stopAll()
         ++accountGeneration
         modelsJob?.cancel()
         cancelChat()

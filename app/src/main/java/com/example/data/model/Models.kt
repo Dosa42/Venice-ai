@@ -65,6 +65,7 @@ data class ChatMessage(
     val text: String,
     val imageBase64: String? = null,
     val attachedFileName: String? = null,
+    val responseItemsJson: String? = null,
     val thoughtProcess: String? = null,
     val modelUsed: String? = null,
     val thinkingEnabled: Boolean = false,

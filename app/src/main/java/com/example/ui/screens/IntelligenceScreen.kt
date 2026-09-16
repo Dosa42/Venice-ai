@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.components.TerminalExecutionCard
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -207,6 +208,8 @@ fun IntelligenceScreen(
             .verticalScroll(scrollState)
             .padding(16.dp)
     ) {
+        TerminalExecutionCard(uiState.terminalCommands, viewModel::stopTerminalCommand, viewModel::stopActiveWork)
+
         // Intelligence Header
         Row(
             modifier = Modifier.fillMaxWidth(),

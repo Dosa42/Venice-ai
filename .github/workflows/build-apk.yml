@@ -89,7 +89,7 @@ jobs:
 
       - name: Test provider responses and model selection
         run: |
-          $GRADLE_CMD :app:testDebugUnitTest --tests 'com.example.data.api.ChatGptApiTest' --tests 'com.example.ChatGptModelSelectorTest' --tests 'com.example.ChatSessionMigrationTest' \
+          $GRADLE_CMD :app:testDebugUnitTest --tests 'com.example.data.api.ChatGptApiTest' --tests 'com.example.ChatGptModelSelectorTest' --tests 'com.example.ChatSessionMigrationTest' --tests 'com.example.data.local.*' --tests 'com.example.data.api.ChatGptToolLoopTest' \
             -Djava.awt.headless=true
 
       - name: Assemble Debug APK

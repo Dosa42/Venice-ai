@@ -80,7 +80,8 @@ object ChatGptApi {
         model: ChatGptModel,
         effort: String?,
         history: List<ChatMessage>,
-        instructions: String
+        instructions: String,
+        tools: JSONArray = JSONArray()
     ): JSONObject {
         require(effort == null || effort in model.reasoningLevels) { "Unsupported reasoning level." }
         // Local welcome/reset notices precede the first user message; they are not model replies.
@@ -91,6 +92,11 @@ object ChatGptApi {
         val input = JSONArray()
         messages.forEach { message ->
             val user = message.role == "user"
+            if (!user && message.responseItemsJson != null) {
+                val items = JSONArray(message.responseItemsJson)
+                for (i in 0 until items.length()) input.put(items.getJSONObject(i))
+                return@forEach
+            }
             val content = JSONArray()
             if (message.text.isNotEmpty()) content.put(JSONObject()
                 .put("type", if (user) "input_text" else "output_text").put("text", message.text))
@@ -100,33 +106,38 @@ object ChatGptApi {
                 .put("role", if (user) "user" else "assistant").put("content", content))
         }
         return JSONObject().put("model", model.id).put("instructions", instructions)
-            .put("input", input).put("tools", JSONArray()).put("tool_choice", "auto")
+            .put("input", input).put("tools", tools).put("tool_choice", "auto")
             .put("parallel_tool_calls", false).put("store", false).put("stream", true)
+            .put("include", JSONArray().put("reasoning.encrypted_content"))
             .apply { if (effort != null) put("reasoning", JSONObject().put("effort", effort)) }
     }
 
-    suspend fun stream(
+    internal suspend fun streamTurn(
         session: OpenAIOAuthSession,
-        model: ChatGptModel,
-        effort: String?,
-        history: List<ChatMessage>,
-        instructions: String,
+        body: JSONObject,
         onText: (String) -> Unit
-    ): String {
-        val body = responseBody(model, effort, history, instructions)
+    ): ChatGptTurn {
         val request = request(session, "responses").header("Accept", "text/event-stream")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         return execute(request) { response ->
             val reader = response.body?.charStream()?.buffered()
                 ?: throw IOException("ChatGPT returned an empty response.")
-            readStream(reader, onText)
+            readTurn(reader, onText)
         }
     }
 
     internal fun readStream(reader: BufferedReader, onText: (String) -> Unit): String {
+        val turn = readTurn(reader, onText)
+        if (turn.text.isBlank()) throw IOException("ChatGPT completed without a text reply.")
+        return turn.text
+    }
+
+    internal fun readTurn(reader: BufferedReader, onText: (String) -> Unit): ChatGptTurn {
         val text = StringBuilder()
         val data = StringBuilder()
         var completed = false
+        var output = JSONArray()
+        val doneItems = sortedMapOf<Int, JSONObject>()
         var lastUpdate = 0L
         fun dispatch() {
             if (data.isEmpty()) return
@@ -135,6 +146,9 @@ object ChatGptApi {
             if (raw == "[DONE]") return
             val event = JSONObject(raw)
             when (event.optString("type")) {
+                "response.output_item.done" -> {
+                    doneItems[event.getInt("output_index")] = event.getJSONObject("item")
+                }
                 "response.output_text.delta" -> {
                     text.append(event.getString("delta"))
                     val now = System.nanoTime()
@@ -146,7 +160,8 @@ object ChatGptApi {
                 "response.completed" -> {
                     val response = event.getJSONObject("response")
                     if (response.optString("status") != "completed") throw IOException("ChatGPT did not complete the response.")
-                    val output = response.optJSONArray("output") ?: JSONArray()
+                    output = response.optJSONArray("output") ?: JSONArray()
+                    if (output.length() == 0) doneItems.values.forEach { output.put(it) }
                     val finalText = StringBuilder()
                     for (i in 0 until output.length()) {
                         val content = output.getJSONObject(i).optJSONArray("content") ?: continue
@@ -179,8 +194,13 @@ object ChatGptApi {
         }
         if (!completed) dispatch()
         if (!completed) throw IOException("ChatGPT connection ended before the reply completed. Please retry.")
-        if (text.isBlank()) throw IOException("ChatGPT completed without a text reply.")
-        return text.toString().also(onText)
+        val hasCalls = (0 until output.length()).any { output.getJSONObject(it).optString("type") == "function_call" }
+        if (text.isBlank() && !hasCalls) throw IOException("ChatGPT completed without text or tool calls.")
+        if (output.length() == 0 && text.isNotBlank()) {
+            output.put(JSONObject().put("type", "message").put("role", "assistant")
+                .put("content", JSONArray().put(JSONObject().put("type", "output_text").put("text", text.toString()))))
+        }
+        return ChatGptTurn(text.toString().also(onText), output)
     }
 
     private suspend fun <T> execute(request: Request, parse: (Response) -> T): T =

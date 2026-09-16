@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.ui.components.TerminalExecutionCard
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -228,6 +229,8 @@ fun ChatScreen(
                 }
             }
         }
+
+        TerminalExecutionCard(uiState.terminalCommands, viewModel::stopTerminalCommand, viewModel::stopActiveWork)
 
         // Shared NetHunter Payload Banner
         if (uiState.sharedTerminalPayload != null) {
