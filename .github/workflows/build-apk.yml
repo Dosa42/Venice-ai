@@ -1,4 +1,4 @@
-name: Build Android Debug APK (Adaptive CI/CD Runner)
+name: Build Android APK (Adaptive CI/CD Runner)
 
 on:
   push:
@@ -120,23 +120,49 @@ jobs:
           $GRADLE_CMD assembleDebug --stacktrace \
             -Djava.awt.headless=true
 
-      - name: Assemble Release APK (Unsigned/Debug-signed)
+      - name: Assemble signed Release APK
         if: ${{ inputs.build_variant == 'release' }}
+        env:
+          VENICE_RELEASE_KEYSTORE_BASE64: ${{ secrets.VENICE_RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.VENICE_RELEASE_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.VENICE_RELEASE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VENICE_RELEASE_KEY_ALIAS }}
         run: |
-          $GRADLE_CMD assembleRelease --stacktrace \
-            -Djava.awt.headless=true || \
-          $GRADLE_CMD assembleDebug --stacktrace \
-            -Djava.awt.headless=true
+          set -euo pipefail
+          for name in VENICE_RELEASE_KEYSTORE_BASE64 STORE_PASSWORD KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing repository Actions secret: $name"
+              exit 1
+            fi
+          done
+          if [ ! -s app/google-services.json ]; then
+            echo "::error::Missing GOOGLE_SERVICES_JSON_BASE64; Google login would not work in this release."
+            exit 1
+          fi
+          export KEY_ALIAS="${KEY_ALIAS:-upload}"
+          export KEYSTORE_PATH="$RUNNER_TEMP/venice-release.jks"
+          printf '%s' "$VENICE_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          keytool -list -keystore "$KEYSTORE_PATH" -storepass "$STORE_PASSWORD" -alias "$KEY_ALIAS" > /dev/null
+          "$GRADLE_CMD" assembleRelease --stacktrace -Djava.awt.headless=true
 
       - name: Discover and Verify Output APK
         id: apk-finder
         run: |
           echo "Locating built APK..."
-          APK_PATH=$(find app/build/outputs/apk -type f -name "*.apk" | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            echo "Error: No APK found in app/build/outputs/apk"
-            find . -name "*.apk"
+          VARIANT="${{ inputs.build_variant || 'debug' }}"
+          APK_PATH="app/build/outputs/apk/$VARIANT/app-$VARIANT.apk"
+          if [ ! -s "$APK_PATH" ]; then
+            echo "::error::Expected $VARIANT APK not found at $APK_PATH"
             exit 1
+          fi
+          if [ "$VARIANT" = "release" ]; then
+            APKSIGNER=$(find "$ANDROID_SDK_ROOT/build-tools" -type f -name apksigner | sort -V | tail -n 1)
+            if [ -z "$APKSIGNER" ]; then
+              echo "::error::Android apksigner is unavailable"
+              exit 1
+            fi
+            "$APKSIGNER" verify --verbose --print-certs "$APK_PATH"
           fi
           echo "APK located at: $APK_PATH"
           echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
