@@ -79,6 +79,28 @@ jobs:
             echo "GRADLE_CMD=gradle" >> $GITHUB_ENV
           fi
 
+      - name: Restore Firebase configuration
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > app/google-services.json
+          else
+            echo "::notice::Firebase configuration absent; Google login cannot run in this APK."
+          fi
+
+      - name: Restore persistent debug signing certificate
+        env:
+          VENICE_DEBUG_KEYSTORE_BASE64: ${{ secrets.VENICE_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$VENICE_DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$VENICE_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+          else
+            echo "::notice::No persistent debug key; Google login requires this APK's signing SHA-1 in Firebase."
+          fi
+
       - name: Run Clean (Optional)
         if: ${{ inputs.clean_build == true }}
         run: $GRADLE_CMD clean
