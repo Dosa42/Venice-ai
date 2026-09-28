@@ -2,7 +2,7 @@ name: Build Android APK (Adaptive CI/CD Runner)
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main", "master", "release/**" ]
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
@@ -40,7 +40,9 @@ concurrency:
 
 jobs:
   build-apk:
-    name: Build ${{ inputs.build_variant || 'debug' }} APK
+    name: Build ${{ (startsWith(github.ref, 'refs/heads/release/') && 'release') || inputs.build_variant || 'debug' }} APK
+    env:
+      BUILD_VARIANT: ${{ (startsWith(github.ref, 'refs/heads/release/') && 'release') || inputs.build_variant || 'debug' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -115,13 +117,13 @@ jobs:
             -Djava.awt.headless=true
 
       - name: Assemble Debug APK
-        if: ${{ (inputs.build_variant || 'debug') == 'debug' }}
+        if: ${{ env.BUILD_VARIANT == 'debug' }}
         run: |
           $GRADLE_CMD assembleDebug --stacktrace \
             -Djava.awt.headless=true
 
       - name: Assemble signed Release APK
-        if: ${{ inputs.build_variant == 'release' }}
+        if: ${{ env.BUILD_VARIANT == 'release' }}
         env:
           VENICE_RELEASE_KEYSTORE_BASE64: ${{ secrets.VENICE_RELEASE_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.VENICE_RELEASE_STORE_PASSWORD }}
@@ -150,7 +152,7 @@ jobs:
         id: apk-finder
         run: |
           echo "Locating built APK..."
-          VARIANT="${{ inputs.build_variant || 'debug' }}"
+          VARIANT="$BUILD_VARIANT"
           APK_PATH="app/build/outputs/apk/$VARIANT/app-$VARIANT.apk"
           if [ ! -s "$APK_PATH" ]; then
             echo "::error::Expected $VARIANT APK not found at $APK_PATH"
@@ -180,13 +182,13 @@ jobs:
           echo "- **Size:** $FILE_SIZE" >> $GITHUB_STEP_SUMMARY
           echo "- **SHA-256:** \`$SHA256_HASH\`" >> $GITHUB_STEP_SUMMARY
           echo "- **MD5:** \`$MD5_HASH\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Variant:** \`${{ inputs.build_variant || 'debug' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Variant:** \`${{ env.BUILD_VARIANT }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Target Device Profile:** Samsung SM-A326B / Kali NetHunter" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VeniceAI-${{ inputs.build_variant || 'debug' }}-apk
+          name: VeniceAI-${{ env.BUILD_VARIANT }}-apk
           path: ${{ steps.apk-finder.outputs.apk_path }}
           retention-days: 30
           if-no-files-found: error
