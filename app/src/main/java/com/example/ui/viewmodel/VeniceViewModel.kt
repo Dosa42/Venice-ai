@@ -609,9 +609,9 @@ class VeniceViewModel : ViewModel() {
         }
     }
 
-    fun signOut() {
+    fun signOut(context: Context) {
         viewModelScope.launch {
-            FirebaseManager.signOut()
+            FirebaseManager.signOut(context)
             _uiState.value = _uiState.value.copy(
                 currentUser = null,
                 statusNotice = "Signed out. Operating locally."

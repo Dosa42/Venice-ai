@@ -269,6 +269,17 @@ fun PrivacyAccountScreen(
                         }
                     }
                 } else {
+                    if (uiState.currentUser.isAnonymous) {
+                        Button(
+                            onClick = { viewModel.signInWithGoogle(context) },
+                            colors = ButtonDefaults.buttonColors(containerColor = VeniceAmber),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("google_sign_in_button")
+                        ) {
+                            Text("Link Google Account", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,7 +293,7 @@ fun PrivacyAccountScreen(
                         )
 
                         Button(
-                            onClick = { viewModel.signOut() },
+                            onClick = { viewModel.signOut(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = VeniceSurfaceElevated),
                             shape = RoundedCornerShape(8.dp)
                         ) {
