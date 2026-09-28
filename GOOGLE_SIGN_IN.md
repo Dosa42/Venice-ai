@@ -34,3 +34,25 @@ GitHub Actions builds still run when these secrets are absent, but Google login 
 
 Firebase setup: https://firebase.google.com/docs/auth/android/google-signin
 Android Credential Manager: https://developer.android.com/identity/sign-in/credential-manager-siwg-implementation
+
+## Signed release APK
+
+Use the **existing release signing keystore** if this package has already been installed as a signed release. Android requires the same signing certificate for an in-place update. The old debug APK may have a different certificate.
+
+Set these GitHub Actions repository secrets:
+
+- `VENICE_RELEASE_KEYSTORE_BASE64`: `base64 -w 0 /path/to/existing-release-key.jks`.
+- `VENICE_RELEASE_STORE_PASSWORD`: keystore password.
+- `VENICE_RELEASE_KEY_PASSWORD`: password for the signing key.
+- `VENICE_RELEASE_KEY_ALIAS`: alias of that key (optional when the alias is `upload`).
+- `GOOGLE_SERVICES_JSON_BASE64`: the updated Firebase file as described above, required so the Google-login release is functional.
+
+In **Actions → Build Android APK (Adaptive CI/CD Runner) → Run workflow**, select the branch containing the Google-login changes and choose `release`. The workflow now fails if a required signing input or Firebase config is missing. It runs `assembleRelease`, selects only `app-release.apk`, verifies its signature with `apksigner`, and uploads the release APK artifact. It never substitutes a debug APK for a release.
+
+To register the release certificate in Firebase, read its SHA-1 from the existing keystore:
+
+```bash
+keytool -list -v -keystore /path/to/existing-release-key.jks -alias upload
+```
+
+Use your actual alias if different. Keep the keystore and passwords backed up outside the repository.
