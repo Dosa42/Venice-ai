@@ -87,9 +87,9 @@ jobs:
         if: ${{ inputs.run_lint == true }}
         run: $GRADLE_CMD lintDebug || true
 
-      - name: Test provider responses and model selection
+      - name: Test local app and terminal
         run: |
-          $GRADLE_CMD :app:testDebugUnitTest --tests 'com.example.data.api.ChatGptApiTest' --tests 'com.example.ChatGptModelSelectorTest' --tests 'com.example.ChatSessionMigrationTest' --tests 'com.example.data.local.*' --tests 'com.example.data.api.ChatGptToolLoopTest' --tests 'com.example.ChatLayoutAndPickerTest' \
+          $GRADLE_CMD :app:testDebugUnitTest \
             -Djava.awt.headless=true
 
       - name: Assemble Debug APK
