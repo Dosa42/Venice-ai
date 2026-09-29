@@ -41,8 +41,6 @@ data class VeniceUiState(
     val terminalCommands: List<TerminalCommand> = emptyList(),
     val adaptiveFacts: List<AdaptiveFact> = emptyList(),
     val vaultPath: String = "",
-    val customVaultPath: String = "",
-    val vaultFallbackReason: String? = null,
     val vaultError: String? = null,
     val vaultNotes: List<VaultNoteFile> = emptyList(),
     val indexedNotes: Int = 0,
@@ -80,9 +78,9 @@ class VeniceViewModel : ViewModel() {
         if (terminal != null) return
         val appContext = context.applicationContext
         this.appContext = appContext
-        vault = VaultFileSystemManager(appContext)
-        auth = ChatGPTAuthManager(appContext)
-        configManager = VaultAuthConfigManager(appContext)
+        vault = VaultFileSystemManager()
+        auth = ChatGPTAuthManager()
+        configManager = VaultAuthConfigManager()
         indexDatabase = VaultIndexDatabase.open(appContext)
         vaultIndex = VaultIndex(indexDatabase!!)
         val executor = NetHunterTerminal(viewModelScope, File(appContext.filesDir, "terminal"))
@@ -123,8 +121,6 @@ class VeniceViewModel : ViewModel() {
                     } else null
                     _uiState.update { it.copy(
                         vaultPath = location.root.absolutePath,
-                        customVaultPath = manager.customVaultPath(),
-                        vaultFallbackReason = location.fallbackReason,
                         vaultError = null,
                         adaptiveFacts = facts,
                         vaultNotes = notes,
@@ -178,26 +174,6 @@ class VeniceViewModel : ViewModel() {
             }
         }
         next.startWatching()
-    }
-
-    fun setCustomVaultPath(path: String) {
-        val manager = vault ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                manager.setCustomVaultPath(path)
-                _uiState.update { it.copy(
-                    customVaultPath = manager.customVaultPath(),
-                    selectedNotePath = null,
-                    selectedNoteText = "",
-                    selectedNoteOriginalText = "",
-                    noteDirty = false
-                ) }
-                observerRoot = null
-                refreshVault()
-            } catch (e: Exception) {
-                _uiState.update { it.copy(vaultError = e.message ?: "Cannot select vault path") }
-            }
-        }
     }
 
     fun selectNote(path: String) {

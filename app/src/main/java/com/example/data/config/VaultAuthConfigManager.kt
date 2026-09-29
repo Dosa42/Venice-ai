@@ -1,6 +1,5 @@
 package com.example.data.config
 
-import android.content.Context
 import com.example.data.filesystem.VaultFileSystemManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,8 +23,8 @@ data class VaultAuthConfig(
 )
 
 /** Reads the existing shared config without generating keys, endpoints, or a default prompt. */
-class VaultAuthConfigManager(context: Context) {
-    private val vault = VaultFileSystemManager(context)
+class VaultAuthConfigManager {
+    private val vault = VaultFileSystemManager()
     private val _config = MutableStateFlow<VaultAuthConfig?>(null)
     val config: StateFlow<VaultAuthConfig?> = _config.asStateFlow()
 

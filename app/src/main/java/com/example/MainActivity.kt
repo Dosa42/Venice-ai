@@ -32,9 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -205,25 +202,16 @@ private fun TerminalPanel(viewModel: VeniceViewModel, state: VeniceUiState) {
 
 @Composable
 private fun VaultPanel(viewModel: VeniceViewModel, state: VeniceUiState, requestVaultAccess: () -> Unit) {
-    var pathDraft by remember(state.customVaultPath) { mutableStateOf(state.customVaultPath) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Shared Obsidian Vault", color = VeniceTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(state.vaultPath.ifEmpty { "/storage/emulated/0/Download/ObsidianVault" },
             color = VeniceTextSecondary, fontFamily = FontFamily.Monospace)
-        state.vaultFallbackReason?.let { Text(it, color = VeniceRose) }
         state.vaultError?.let {
             Text(it, color = VeniceRose)
             Button(onClick = requestVaultAccess) { Text("Grant storage access") }
         }
         Button(onClick = viewModel::refreshVault) { Text("Reload vault") }
-        OutlinedTextField(
-            value = pathDraft,
-            onValueChange = { pathDraft = it },
-            label = { Text("Custom vault path (blank = Download/ObsidianVault)") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(onClick = { viewModel.setCustomVaultPath(pathDraft) }) { Text("Use vault path") }
         if (state.vaultPath.isNotEmpty()) {
             val sessionStatus = when {
                 state.sharedSession == null -> "No shared session file"
