@@ -2,7 +2,6 @@ package com.example.data.filesystem
 
 import android.content.Context
 import android.os.Environment
-import android.system.Os
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -152,8 +151,10 @@ class VaultFileSystemManager(context: Context) {
                 stream.write(bytes)
                 stream.fd.sync()
             }
-            // Linux rename replaces the old file in one operation; never delete it first.
-            Os.rename(temp.absolutePath, target.absolutePath)
+            // Same-directory rename is atomic on Android's Linux filesystem. Never delete first.
+            if (!temp.renameTo(target)) {
+                throw IOException("Atomic rename failed for ${target.absolutePath}")
+            }
         } finally {
             if (temp.exists()) temp.delete()
         }
