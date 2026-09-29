@@ -3,10 +3,13 @@ package com.example
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +32,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,19 +60,41 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val viewModel: VeniceViewModel by viewModels()
+    private val storagePermissions = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { viewModel.refreshVault() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         viewModel.initialize(this)
         handleIncomingIntent(intent)
-        setContent { VeniceTheme { VeniceApp(viewModel) } }
+        setContent { VeniceTheme { VeniceApp(viewModel, ::requestVaultAccess) } }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.refreshVault()
+    }
+
+    private fun requestVaultAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            startActivity(Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName")
+            ))
+        } else {
+            storagePermissions.launch(arrayOf(
+                android.Manifest.permission.READ_EXTERNAL_STORAGE,
+                android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+            ))
+        }
     }
 
     private fun handleIncomingIntent(intent: Intent?) {
@@ -87,14 +115,14 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun VeniceApp(viewModel: VeniceViewModel) {
+fun VeniceApp(viewModel: VeniceViewModel, requestVaultAccess: () -> Unit) {
     val state by viewModel.uiState.collectAsState()
     Scaffold(
         topBar = {
             Surface(color = VeniceSurface, modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("VENICE AI", color = VeniceTextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                    Text("Local workspace · No account or model connection", color = VeniceTextSecondary, fontSize = 12.sp)
+                    Text("Shared vault · No model backend connected", color = VeniceTextSecondary, fontSize = 12.sp)
                 }
             }
         },
@@ -118,7 +146,7 @@ fun VeniceApp(viewModel: VeniceViewModel) {
             when (state.currentTab) {
                 VeniceNavTab.WORKSPACE -> WorkspacePanel(viewModel, state)
                 VeniceNavTab.TERMINAL -> TerminalPanel(viewModel, state)
-                VeniceNavTab.VAULT -> VaultPanel(state)
+                VeniceNavTab.VAULT -> VaultPanel(viewModel, state, requestVaultAccess)
             }
         }
     }
@@ -142,7 +170,7 @@ private fun WorkspacePanel(viewModel: VeniceViewModel, state: VeniceUiState) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Workspace", color = VeniceTextPrimary, fontWeight = FontWeight.Bold, fontSize = 22.sp)
-        Text("No AI service or login is connected. Local files and terminal output remain available.",
+        Text("No AI backend is connected. Shared vault data, files and terminal remain available.",
             color = VeniceTextSecondary)
         Button(onClick = chooseFile) { Text("Open file with MiXplorer") }
         state.sharedText?.let { ContentCard("Shared text", it) }
@@ -176,10 +204,75 @@ private fun TerminalPanel(viewModel: VeniceViewModel, state: VeniceUiState) {
 }
 
 @Composable
-private fun VaultPanel(state: VeniceUiState) {
+private fun VaultPanel(viewModel: VeniceViewModel, state: VeniceUiState, requestVaultAccess: () -> Unit) {
+    var pathDraft by remember(state.customVaultPath) { mutableStateOf(state.customVaultPath) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Local runtime facts", color = VeniceTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Shared Obsidian Vault", color = VeniceTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(state.vaultPath.ifEmpty { "/storage/emulated/0/Download/ObsidianVault" },
+            color = VeniceTextSecondary, fontFamily = FontFamily.Monospace)
+        state.vaultFallbackReason?.let { Text(it, color = VeniceRose) }
+        state.vaultError?.let {
+            Text(it, color = VeniceRose)
+            Button(onClick = requestVaultAccess) { Text("Grant storage access") }
+        }
+        Button(onClick = viewModel::refreshVault) { Text("Reload vault") }
+        OutlinedTextField(
+            value = pathDraft,
+            onValueChange = { pathDraft = it },
+            label = { Text("Custom vault path (blank = Download/ObsidianVault)") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(onClick = { viewModel.setCustomVaultPath(pathDraft) }) { Text("Use vault path") }
+        if (state.vaultPath.isNotEmpty()) {
+            val sessionStatus = when {
+                state.sharedSession == null -> "No shared session file"
+                state.sharedSession.isValid -> "Token loaded; expires at ${state.sharedSession.expiresAt}"
+                else -> "Session file loaded, but token is expired or incomplete"
+            }
+            ContentCard("Shared session", sessionStatus)
+            state.sharedConfig?.let { config ->
+                ContentCard("Shared config",
+                    "Provider: ${config.provider.ifEmpty { "(unset)" }}\n" +
+                    "Model: ${config.activeModel.ifEmpty { "(unset)" }}\n" +
+                    "Persona: ${config.personaName.ifEmpty { "(unset)" }}\n" +
+                    "API key: ${if (config.apiKey.isNotEmpty()) "present" else "absent"}\n" +
+                    "System prompt: ${config.systemPrompt}")
+            } ?: ContentCard("Shared config", "No vault_auth_config.json file")
+            Text("Markdown notes (${state.vaultNotes.size})", color = VeniceTextPrimary,
+                fontWeight = FontWeight.Bold)
+            Text("Room index: ${state.indexedNotes} notes", color = VeniceTextSecondary)
+            state.indexError?.let { Text("Index error: $it", color = VeniceRose) }
+            state.vaultNotes.forEach { note ->
+                Button(onClick = { viewModel.selectNote(note.relativePath) }) {
+                    Text(note.relativePath)
+                }
+            }
+            state.selectedNotePath?.let { path ->
+                Text(path, color = VeniceCyan, fontFamily = FontFamily.Monospace)
+                OutlinedTextField(
+                    value = state.selectedNoteText,
+                    onValueChange = viewModel::setNoteText,
+                    label = { Text("Markdown") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 6
+                )
+                Button(onClick = viewModel::saveSelectedNote, enabled = state.noteDirty) {
+                    Text("Save note")
+                }
+            }
+            OutlinedTextField(
+                value = state.newNoteTitle,
+                onValueChange = viewModel::setNewNoteTitle,
+                label = { Text("New note title (Concepts/)") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Button(onClick = viewModel::createNote, enabled = state.newNoteTitle.isNotBlank()) {
+                Text("Create Markdown note")
+            }
+        }
+        Text("Shared adaptive facts (${state.adaptiveFacts.size})", color = VeniceTextPrimary,
+            fontWeight = FontWeight.Bold)
         state.adaptiveFacts.forEach { fact ->
             ContentCard(fact.key, fact.value)
         }

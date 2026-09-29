@@ -1,6 +1,7 @@
 package com.example.data.adaptive
 
 import android.content.Context
+import com.example.data.filesystem.VaultFileSystemManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -66,80 +67,49 @@ object DynamicAdaptiveEngine {
     private const val PREFS_NAME = "venice_dynamic_adaptive_framework"
     private const val KEY_FACTS = "learned_facts_json"
     private const val KEY_AUTO_LEARN_ENABLED = "auto_learn_enabled"
-
-    private val DEFAULT_FACTS = listOf(
-        AdaptiveFact(
-            category = AdaptiveCategory.CHROOT_ENVIRONMENT,
-            key = "kali_chroot_rootfs",
-            value = "/data/local/nhsystem/kali-arm64 (Status: Running)",
-            source = "Hardware Blueprint",
-            confidence = 1.0f
-        ),
-        AdaptiveFact(
-            category = AdaptiveCategory.SYSTEM_CONSTRAINT,
-            key = "oom_safeguard_rule",
-            value = "Limit multi-threaded compilation to -j2 on SM-A326B to prevent low-RAM OOM",
-            source = "Hardware Blueprint",
-            confidence = 1.0f
-        ),
-        AdaptiveFact(
-            category = AdaptiveCategory.NETWORK_TELEMETRY,
-            key = "default_wlan_interface",
-            value = "wlan0 (192.168.1.20/24)",
-            source = "Hardware Blueprint",
-            confidence = 1.0f
-        ),
-        AdaptiveFact(
-            category = AdaptiveCategory.RUNTIME_SERVICE,
-            key = "chroot_startup_daemons",
-            value = "Apache2, DBus (RunOnChrootStart: ON)",
-            source = "Hardware Blueprint",
-            confidence = 1.0f
-        ),
-        AdaptiveFact(
-            category = AdaptiveCategory.KERNEL_DRIVER,
-            key = "kernel_build_signature",
-            value = "Linux kali 4.14.186-27095505 MediaTek MT6853 aarch64",
-            source = "Hardware Blueprint",
-            confidence = 1.0f
-        )
-    )
+    private const val FACTS_FILE = ".config/venice_adaptive_facts.json"
+    private const val SETTINGS_FILE = ".config/venice_adaptive_settings.json"
 
     fun isAutoLearningEnabled(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(KEY_AUTO_LEARN_ENABLED, true)
+        return VaultFileSystemManager(context).readJson(SETTINGS_FILE)
+            ?.optBoolean(KEY_AUTO_LEARN_ENABLED, true) ?: true
     }
 
     fun setAutoLearningEnabled(context: Context, enabled: Boolean) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(KEY_AUTO_LEARN_ENABLED, enabled).apply()
+        val vault = VaultFileSystemManager(context)
+        val settings = vault.readJson(SETTINGS_FILE) ?: JSONObject()
+        settings.put(KEY_AUTO_LEARN_ENABLED, enabled)
+        vault.writeJson(SETTINGS_FILE, settings)
     }
 
     fun loadFacts(context: Context): List<AdaptiveFact> {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val raw = prefs.getString(KEY_FACTS, null)
-        if (raw.isNullOrBlank()) {
-            saveFacts(context, DEFAULT_FACTS)
-            return DEFAULT_FACTS
-        }
-        return try {
-            val array = JSONArray(raw)
-            val list = mutableListOf<AdaptiveFact>()
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                AdaptiveFact.fromJson(obj)?.let { list.add(it) }
+        val vault = VaultFileSystemManager(context)
+        var json = vault.readJson(FACTS_FILE)
+        if (json == null) {
+            // One-time copy of existing private data. An existing shared file always wins.
+            val old = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_FACTS, null)
+            if (!old.isNullOrBlank()) {
+                val migrated = JSONObject().put(KEY_FACTS, JSONArray(old))
+                vault.writeJson(FACTS_FILE, migrated, overwrite = false)
+                json = migrated
             }
-            if (list.isEmpty()) DEFAULT_FACTS else list
-        } catch (_: Exception) {
-            DEFAULT_FACTS
         }
+        val array = json?.optJSONArray(KEY_FACTS) ?: return emptyList()
+        val list = mutableListOf<AdaptiveFact>()
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            AdaptiveFact.fromJson(obj)?.let { list.add(it) }
+        }
+        return list
     }
 
     fun saveFacts(context: Context, facts: List<AdaptiveFact>) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val array = JSONArray()
         facts.forEach { array.put(it.toJson()) }
-        prefs.edit().putString(KEY_FACTS, array.toString()).apply()
+        VaultFileSystemManager(context).writeJson(
+            FACTS_FILE, JSONObject().put(KEY_FACTS, array)
+        )
     }
 
     fun addOrUpdateFact(context: Context, newFact: AdaptiveFact): List<AdaptiveFact> {
@@ -169,8 +139,7 @@ object DynamicAdaptiveEngine {
     }
 
     fun resetToDefaults(context: Context): List<AdaptiveFact> {
-        saveFacts(context, DEFAULT_FACTS)
-        return DEFAULT_FACTS
+        return clearAll(context)
     }
 
     fun clearAll(context: Context): List<AdaptiveFact> {

@@ -1,6 +1,7 @@
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
+  alias(libs.plugins.google.devtools.ksp)
 }
 
 android {
@@ -66,6 +67,9 @@ dependencies {
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.okhttp)
+  implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.room.ktx)
+  "ksp"(libs.androidx.room.compiler)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)
   testImplementation(libs.junit)
