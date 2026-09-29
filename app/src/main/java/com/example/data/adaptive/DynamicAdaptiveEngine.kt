@@ -71,19 +71,19 @@ object DynamicAdaptiveEngine {
     private const val SETTINGS_FILE = ".config/venice_adaptive_settings.json"
 
     fun isAutoLearningEnabled(context: Context): Boolean {
-        return VaultFileSystemManager(context).readJson(SETTINGS_FILE)
+        return VaultFileSystemManager().readJson(SETTINGS_FILE)
             ?.optBoolean(KEY_AUTO_LEARN_ENABLED, true) ?: true
     }
 
     fun setAutoLearningEnabled(context: Context, enabled: Boolean) {
-        val vault = VaultFileSystemManager(context)
+        val vault = VaultFileSystemManager()
         val settings = vault.readJson(SETTINGS_FILE) ?: JSONObject()
         settings.put(KEY_AUTO_LEARN_ENABLED, enabled)
         vault.writeJson(SETTINGS_FILE, settings)
     }
 
     fun loadFacts(context: Context): List<AdaptiveFact> {
-        val vault = VaultFileSystemManager(context)
+        val vault = VaultFileSystemManager()
         var json = vault.readJson(FACTS_FILE)
         if (json == null) {
             // One-time copy of existing private data. An existing shared file always wins.
@@ -107,7 +107,7 @@ object DynamicAdaptiveEngine {
     fun saveFacts(context: Context, facts: List<AdaptiveFact>) {
         val array = JSONArray()
         facts.forEach { array.put(it.toJson()) }
-        VaultFileSystemManager(context).writeJson(
+        VaultFileSystemManager().writeJson(
             FACTS_FILE, JSONObject().put(KEY_FACTS, array)
         )
     }

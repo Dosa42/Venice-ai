@@ -1,6 +1,5 @@
 package com.example.data.auth
 
-import android.content.Context
 import com.example.data.filesystem.VaultFileSystemManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,8 +22,8 @@ data class ChatGPTSession(
 }
 
 /** Shared file reader/writer only. No OAuth, PKCE, token refresh, or provider requests. */
-class ChatGPTAuthManager(context: Context) {
-    private val vault = VaultFileSystemManager(context)
+class ChatGPTAuthManager {
+    private val vault = VaultFileSystemManager()
     private val _session = MutableStateFlow<ChatGPTSession?>(null)
     val session: StateFlow<ChatGPTSession?> = _session.asStateFlow()
 

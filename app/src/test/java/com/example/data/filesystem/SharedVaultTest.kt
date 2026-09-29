@@ -1,6 +1,7 @@
 package com.example.data.filesystem
 
 import android.content.Context
+import android.os.Environment
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.adaptive.DynamicAdaptiveEngine
 import com.example.data.auth.ChatGPTAuthManager
@@ -15,9 +16,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
-import org.junit.Rule
 import org.junit.Test
-import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -25,43 +24,45 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
 class SharedVaultTest {
-    @get:Rule val temp = TemporaryFolder()
     private lateinit var context: Context
     private lateinit var vault: VaultFileSystemManager
+    private lateinit var root: File
 
     @Before fun setup() {
         context = ApplicationProvider.getApplicationContext()
-        context.getSharedPreferences("vault_storage_prefs", Context.MODE_PRIVATE)
-            .edit().putString("custom_vault_path", temp.root.absolutePath).commit()
         context.getSharedPreferences("venice_dynamic_adaptive_framework", Context.MODE_PRIVATE)
             .edit().clear().commit()
-        vault = VaultFileSystemManager(context)
+        vault = VaultFileSystemManager()
+        root = vault.resolveLocation().root
     }
 
     @After fun cleanup() {
-        context.getSharedPreferences("vault_storage_prefs", Context.MODE_PRIVATE)
-            .edit().clear().commit()
+        listOf(
+            "Concepts/existing.md", "Wiki/test.md", ".config/venice_adaptive_facts.json",
+            ".auth/chatgpt_session.json"
+        ).forEach { File(root, it).delete() }
         context.getSharedPreferences("venice_dynamic_adaptive_framework", Context.MODE_PRIVATE)
             .edit().clear().commit()
     }
 
     @Test fun topologyKeepsExistingMarkdownAndNeverSeedsFacts() {
-        val original = File(temp.root, "Concepts/existing.md")
+        val original = File(root, "Concepts/existing.md")
         original.parentFile!!.mkdirs()
         original.writeText("# Existing\nuser-owned")
         vault.ensureVaultTopology()
         assertEquals("# Existing\nuser-owned", original.readText())
         assertEquals(listOf("Concepts/existing.md"), vault.listNotes().map { it.relativePath })
         assertTrue(DynamicAdaptiveEngine.loadFacts(context).isEmpty())
-        assertFalse(File(temp.root, ".config/venice_adaptive_facts.json").exists())
+        assertFalse(File(root, ".config/venice_adaptive_facts.json").exists())
     }
 
-    @Test fun inaccessibleCustomPathFallsBackToSharedAnchor() {
-        context.getSharedPreferences("vault_storage_prefs", Context.MODE_PRIVATE)
-            .edit().putString("custom_vault_path", "content://unavailable/tree").commit()
+    @Test fun vaultUsesOnlyDownloadAnchor() {
         val location = vault.resolveLocation()
-        assertEquals("ObsidianVault", location.root.name)
-        assertTrue(location.fallbackReason!!.contains("inaccessible"))
+        assertEquals(
+            File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "ObsidianVault").canonicalFile,
+            location.root
+        )
     }
 
     @Test fun explicitNoteWriteRejectsCollisionAndStaleEdit() {
@@ -69,7 +70,7 @@ class SharedVaultTest {
         vault.saveNote("Wiki/test.md", "# first")
         val collision = runCatching { vault.saveNote("Wiki/test.md", "replacement") }
         assertTrue(collision.isFailure)
-        File(temp.root, "Wiki/test.md").writeText("# external edit")
+        File(root, "Wiki/test.md").writeText("# external edit")
         val stale = runCatching {
             vault.saveNote("Wiki/test.md", "# my edit", overwrite = true, expectedContent = "# first")
         }
@@ -96,12 +97,12 @@ class SharedVaultTest {
 
     @Test fun missingSessionAndConfigAreNotCreated() = runBlocking {
         vault.ensureVaultTopology()
-        assertNull(ChatGPTAuthManager(context).reloadFromDisk())
-        assertNull(VaultAuthConfigManager(context).reloadFromDisk())
-        assertFalse(File(temp.root, ".auth/chatgpt_session.json").exists())
-        assertFalse(File(temp.root, ".auth/vault_auth_config.json").exists())
+        assertNull(ChatGPTAuthManager().reloadFromDisk())
+        assertNull(VaultAuthConfigManager().reloadFromDisk())
+        assertFalse(File(root, ".auth/chatgpt_session.json").exists())
+        assertFalse(File(root, ".auth/vault_auth_config.json").exists())
         vault.writeJson(".auth/chatgpt_session.json",
             JSONObject().put("accessToken", "token").put("expiresAt", System.currentTimeMillis() + 60_000))
-        assertTrue(ChatGPTAuthManager(context).reloadFromDisk()!!.isValid)
+        assertTrue(ChatGPTAuthManager().reloadFromDisk()!!.isValid)
     }
 }
