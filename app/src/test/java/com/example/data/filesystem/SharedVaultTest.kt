@@ -56,6 +56,14 @@ class SharedVaultTest {
         assertFalse(File(temp.root, ".config/venice_adaptive_facts.json").exists())
     }
 
+    @Test fun inaccessibleCustomPathFallsBackToSharedAnchor() {
+        context.getSharedPreferences("vault_storage_prefs", Context.MODE_PRIVATE)
+            .edit().putString("custom_vault_path", "content://unavailable/tree").commit()
+        val location = vault.resolveLocation()
+        assertEquals("ObsidianVault", location.root.name)
+        assertTrue(location.fallbackReason!!.contains("inaccessible"))
+    }
+
     @Test fun explicitNoteWriteRejectsCollisionAndStaleEdit() {
         vault.ensureVaultTopology()
         vault.saveNote("Wiki/test.md", "# first")

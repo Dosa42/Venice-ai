@@ -24,10 +24,11 @@ class VaultFileSystemManager(context: Context) {
     fun resolveLocation(): VaultLocation {
         val custom = preferences.getString("custom_vault_path", null)?.trim().orEmpty()
         if (custom.isNotEmpty()) {
-            require(custom.startsWith("/")) { "custom_vault_path must be an absolute filesystem path." }
-            val directory = File(custom)
-            if (directory.isDirectory && directory.canRead() && directory.canWrite()) {
-                return VaultLocation(directory.canonicalFile)
+            if (custom.startsWith("/")) {
+                val directory = File(custom)
+                if (directory.isDirectory && directory.canRead() && directory.canWrite()) {
+                    return VaultLocation(directory.canonicalFile)
+                }
             }
         }
         val directory = File(
