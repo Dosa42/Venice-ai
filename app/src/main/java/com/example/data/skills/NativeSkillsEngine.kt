@@ -14,7 +14,6 @@ data class NativeSkill(
  * Native Android Engineering Skills Knowledge Base.
  * Injects legendary, battle-tested Android engineering standards into Venice AI's system prompt:
  * - android-cli: Official docs search and knowledge retrieval
- * - android-secret-management: Secrets Gradle Plugin, .env/.env.example, BuildConfig, APK security
  * - android-typography: Local static .ttf font bundling via font-util CLI, Compose FontFamily
  * - app-icon-generation: Material You Adaptive Icon specifications (66dp safe zone, layer-list)
  * - design-guidelines: High-fidelity M3 Compose polish, edge-to-edge insets, 48dp touch targets
@@ -41,36 +40,6 @@ android docs search "Jetpack Compose WindowInsets"
 
 # Fetch full specification
 android docs fetch "compose/layouts/insets"
-            """.trimIndent()
-        ),
-        NativeSkill(
-            id = "android-secret-management",
-            name = "Android Secret & Credential Management",
-            category = "Security & Gradle",
-            tag = "Security",
-            summary = "Secrets Gradle Plugin, .env.example placeholders, BuildConfig injection, and APK extraction warnings.",
-            coreDirectives = listOf(
-                "ALWAYS define placeholders in `.env.example` (e.g. `API_KEY=KEY_PLACEHOLDER`).",
-                "ALWAYS access secrets through `BuildConfig.<NAME>` rather than hardcoding in source code.",
-                "NEVER commit `.env` containing real keys to version control; verify `.gitignore` covers `.env`.",
-                "NEVER instruct users to use `local.properties` for API keys.",
-                "Warn users that decompiled APKs expose all embedded strings/BuildConfig keys; recommend backend proxies for production."
-            ),
-            codeRecipe = """
-// 1. In .env.example:
-// VENICE_API_KEY=PLACEHOLDER
-
-// 2. In app/build.gradle.kts:
-// secrets {
-//     propertiesFileName = ".env"
-//     defaultPropertiesFileName = ".env.example"
-// }
-
-// 3. Access in Kotlin:
-val apiKey: String = BuildConfig.VENICE_API_KEY
-if (apiKey.isBlank()) {
-    // Graceful fallback or user alert
-}
             """.trimIndent()
         ),
         NativeSkill(

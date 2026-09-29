@@ -1,9 +1,7 @@
 package com.example.data.model
 
-import com.squareup.moshi.JsonClass
 import java.util.UUID
 
-@JsonClass(generateAdapter = true)
 data class Persona(
     val id: String,
     val name: String,
@@ -78,18 +76,11 @@ data class ChatSession(
     val personaId: String = "venice_unfiltered",
     val selectedModel: String = "",
     val highThinkingEnabled: Boolean = false,
-    val useChatGpt: Boolean = true,
     val reasoningEffort: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val messages: List<ChatMessage> = emptyList()
-) {
-    // Preserve old conversations while continuing them with the user's ChatGPT selection.
-    fun forChatGpt(modelId: String?, effort: String?): ChatSession = if (useChatGpt) this else copy(
-        useChatGpt = true, selectedModel = modelId.orEmpty(), reasoningEffort = effort,
-        highThinkingEnabled = false
-    )
-}
+)
 
 data class GeneratedArt(
     val id: String = UUID.randomUUID().toString(),
